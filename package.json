@@ -1,0 +1,27 @@
+{
+  "name": "spiccato",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "node scripts/fetch-staff-prompt.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "js-yaml": "^5.2.3",
+    "maplibre-gl": "^6.1.0",
+    "maplibre-gl-layer-control": "^0.17.4"
+  },
+  "devDependencies": {
+    "@maplibre/maplibre-gl-style-spec": "^26.2.1",
+    "@types/node": "^26.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.0",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^4.1.10"
+  }
+}
