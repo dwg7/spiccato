@@ -3,6 +3,9 @@ import { resolveLayers, resolveStyles } from './catalog.ts';
 import { buildStyle, computeInitialView } from './style.ts';
 import { renderFormView, renderMapView } from './render.ts';
 import { decodeIntentFragment } from './fragment.ts';
+import { parseShorthandFragment } from './shorthand.ts';
+import { dump as yamlDump } from 'js-yaml';
+import type { MapIntent } from './types.ts';
 // Fetched at build time (scripts/fetch-staff-prompt.mjs), bundled as a plain
 // string. Ported from hfu/faceless-cartographer D19; see DECISIONS.md D1.
 import staffPromptMarkdown from './staff-prompt.txt?raw';
@@ -14,24 +17,37 @@ function showForm(opts: { prefill?: string; error?: string } = {}) {
   renderFormView(app!, { ...opts, staffPromptMarkdown, onSubmit: handleSubmit });
 }
 
-async function handleSubmit(rawIntent: string): Promise<void> {
-  const parsed = parseMapIntent(rawIntent);
-  if (!parsed.ok) {
-    showForm({ prefill: rawIntent, error: parsed.error });
-    return;
-  }
-
-  const { intent } = parsed;
+// Shared by the full-YAML path (handleSubmit) and the shorthand path
+// (bootstrap's #q= branch, DECISIONS.md D6) -- both end up with a real
+// MapIntent object and just run the same resolve/build/render pipeline.
+// rawIntent is null only for shorthand, where there's no original text to
+// preserve; it's synthesized here (after goal synthesis below) instead of
+// upfront, so "Copy Map Intent" reflects the same goal text the panel shows.
+async function renderIntent(intent: MapIntent, rawIntent: string | null): Promise<void> {
   const [{ resolved, missing: missingLayers }, { resolved: resolvedStyles, missing: missingStyles }] = await Promise.all([
     resolveLayers(intent),
     resolveStyles(intent)
   ]);
   const missing = [...missingLayers, ...missingStyles];
+
+  // An empty goal (always true for shorthand-constructed intents, D6;
+  // possible but unusual for a pasted/decoded one too) gets a readable
+  // summary synthesized from whatever actually resolved, using each
+  // catalog's own layer name -- so a Staff agent using the shorthand format
+  // never has to write free-text Japanese prose at all in the common case.
+  if (intent.goal === '') {
+    const names = [
+      ...resolved.map((r) => r.tilejson.name ?? r.source_id),
+      ...resolvedStyles.map((s) => s.label ?? s.style_id)
+    ];
+    intent.goal = names.length > 0 ? `${names.join('、')} を表示。` : '(表示するレイヤーが指定されていません)';
+  }
+
   const { style, unrenderable, styleLayerIds, clickableLayerIds } = buildStyle(intent, resolved, resolvedStyles);
   const view = computeInitialView(intent, resolved);
 
   renderMapView(app!, {
-    rawIntent,
+    rawIntent: rawIntent ?? yamlDump(intent),
     intent,
     view,
     style,
@@ -50,18 +66,41 @@ async function handleSubmit(rawIntent: string): Promise<void> {
   });
 }
 
+async function handleSubmit(rawIntent: string): Promise<void> {
+  const parsed = parseMapIntent(rawIntent);
+  if (!parsed.ok) {
+    showForm({ prefill: rawIntent, error: parsed.error });
+    return;
+  }
+  await renderIntent(parsed.intent, rawIntent);
+}
+
 // DECISIONS.md D2: unlike hfu/faceless-cartographer's one-shot, cleared-on-
 // load fragment (D32 there), a spiccato URL is read on load and then kept
 // live -- the fragment is never cleared, and renderMapView's own listeners
 // (moveend, layer toggles) keep rewriting it via history.replaceState as
 // the map changes. Opening the URL a second time reproduces the same map,
 // by design.
+//
+// Two decode formats are tried in order: the rich, compressed #m= format
+// (full Map Intent fidelity, needs code execution to construct -- D3), then
+// the plain #q= shorthand (no encoding at all, hand-writable -- D6). Either
+// way, once rendered, ongoing live reflection always writes back through
+// #m= (renderMapView), so a #q= link becomes a #m= link the moment the map
+// changes.
 async function bootstrap(): Promise<void> {
   const decoded = await decodeIntentFragment(location.hash);
   if (decoded !== null) {
     await handleSubmit(decoded);
     return;
   }
+
+  const shorthandIntent = parseShorthandFragment(location.hash);
+  if (shorthandIntent !== null) {
+    await renderIntent(shorthandIntent, null);
+    return;
+  }
+
   showForm();
 }
 

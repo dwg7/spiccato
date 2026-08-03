@@ -10,6 +10,8 @@
 | [D2](#d2-url-に状態を持たせることを既定にするadr-0001からの意図的な転換) | URL に状態を持たせることを既定にする(ADR 0001からの意図的な転換) | Accepted | 2026-08-03 |
 | [D3](#d3-フラグメントのエンコードはcompressionstreamによるdeflate圧縮--base64url自前実装は持たない) | フラグメントのエンコードは`CompressionStream`によるdeflate圧縮 + base64url(自前実装は持たない) | Accepted | 2026-08-03 |
 | [D4](#d4-プライバシー情報管理上の分析) | プライバシー・情報管理上の分析 | Accepted | 2026-08-03 |
+| [D5](#d5-ベースマップ地形が描画されない不具合mapliblreワーカースクリプトの欠落) | ベースマップ・地形が描画されない不具合(MapLibreワーカースクリプトの欠落) | Accepted | 2026-08-03 |
+| [D6](#d6-コード実行環境の無いgenai向けにq簡易フォーマットを追加する) | コード実行環境の無いGenAI向けに `#q=` 簡易フォーマットを追加する | Accepted | 2026-08-03 |
 
 ---
 
@@ -92,3 +94,33 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 **Decision**: 追加のマスキング・暗号化・有効期限付きリンク等の機構は実装しない(過剰実装と判断)。Map Intentは平文で共有可能な設計であることを前提とし、`sharing_policy.url_share: false` はURLに載らないための保護ではなく人間への注意喚起として位置づける(D2）。README/フォーム画面の文言で「機密情報をMap Intentに含めない」という前提を明示する。
 
 **Consequences**: 将来、真に機密性の高いユースケース(組織内限定データ等)が実際に必要になった場合、この判断(技術的強制を持たない)は再検討対象になる。その場合も、まず検討すべきは「spiccatoで機密データを扱わない」という運用上の切り分けであり、spiccato自体に認可機構を実装することではないと考える(静的サイトというアーキテクチャの根本と衝突するため)。
+
+## D5: ベースマップ・地形が描画されない不具合(MapLibreワーカースクリプトの欠落)
+
+**Status**: Accepted
+
+**Context**: 公開直後、ユーザーから「熊本地震・津波・御嶽山いずれの例でも、bvmap背景地図とMapterhorn地形が全く描画されない(主題レイヤーだけが白背景の上に浮かんで見える)」との報告があった。調査の第一段階では、著者自身のテスト環境(自動化ブラウザツール)で `document.hidden: true` かつ `requestAnimationFrame` が実質的に一度も発火していないことを確認し、これはツール側の描画ループ停止によるものだと誤って結論した。しかしユーザーが自身の実ブラウザで同じ現象を確認したことで、この診断が誤りだったと判明し、再調査した。
+
+再調査の結果、実際の原因は次の通りだった: `maplibre-gl` 6.x はベクトルタイル(bvmap)の解析とraster-dem(Mapterhorn地形)のデコードを Web Worker に委譲しており、そのワーカースクリプト(`maplibre-gl-worker.mjs`)はページと同じオリジンの相対URLから実行時に読み込まれる。`vite-plugin-singlefile` はメインの JS/CSS を `index.html` にインライン化するが、この動的に構築されるWorker URLはインライン化の対象にならない。一方 `docs/` には `index.html` と `.nojekyll` しか含まれておらず、`https://dwg7.github.io/spiccato/maplibre-gl-worker.mjs` は存在しない(404)ままデプロイされていた。ラスター画像ソース(熊本のオルソ画像、津波のPNGタイル等)はWorkerを必要とせず正常に描画されていたため、レイヤー種別ごとの問題に見えてしまっていた。
+
+**Decision**: `node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs`(および対応する `.map`)を `public/` にコピーする。Viteの `publicDir` コピー処理により、`docs/` にも同じファイル名でそのまま配置され、ブラウザが要求していたのと同じURLパスで実際に配信されるようになる。
+
+**Consequences**: `public/maplibre-gl-worker.mjs`・`public/maplibre-gl-worker.mjs.map` を追加(node_modules由来のバイナリ、`.gitignore` の対象外)。将来 `maplibre-gl` をアップデートした際は、このファイルも `node_modules/maplibre-gl/dist/` から再コピーする必要がある(自動追随しない、手動更新が必要な vendoring)。この種の「ビルドツールが検出できないURLで参照される補助ファイル」は今後も起こり得るため、依存パッケージの大きなバージョンアップ後は実際にデプロイ済みサイトをネットワークタブ等で確認する習慣が要る。副産物として `map.on('error', ...)` のログ出力を追加し、今後同種の問題の切り分けを容易にした。
+
+## D6: コード実行環境の無いGenAI向けに `#q=` 簡易フォーマットを追加する
+
+**Status**: Accepted
+
+**Context**: D3で選定した `#m=`(deflate圧縮+base64url)は、Staffがバイト単位の変換を正確に手計算できることを前提にしており、実質的にコード実行環境(Bash等のツール)を持つ生成AIしか正しいリンクを構築できない。これは「Claudeがリンクを生成して返す」というspiccatoの目的にとって選別的すぎるという指摘があった。検討の結果、圧縮の有無に関わらずbase64相当のバイト単位変換自体が生成AIにとって手計算困難な作業であり(D3時点の`#intent=`無圧縮base64urlも同様に困難だった)、単に圧縮をやめるだけでは解決しないと判断した。
+
+一方で、Staffは既にMap Intentを書く前提としてカタログを照会し、実在する `source_id` を確認済みである(D3の`hfu/layers-martin` STAFF_PROMPT.md提案参照)。この確認済みの `source_id` 文字列をそのまま、コンマ区切りでURLに並べるだけなら、バイト単位の変換は一切不要で、生成AIが最も得意とする「検証済みの文字列をテンプレートに当てはめる」作業で済む。日本語の自由記述(`goal`)さえ省略可能にすれば、URLに含める内容はほぼ全て英数字(catalog URI・source_id・bbox数値)になり、パーセントエンコーディングの手計算すら不要になる。
+
+**Decision**: `src/shorthand.ts` に `parseShorthandFragment` を新設する。ワイヤーフォーマットは `#q=` に続く通常のquery string(`URLSearchParams` でパース)で、`catalog`(必須、カタログURI)・`type`(任意、既定 `layers_txt`)・`req`/`opt`(コンマ区切りの `source_id` リスト、いずれか一方は必須)・`bbox`(`w,s,e,n`)・`name`・`goal`(いずれも任意)を持つ。
+
+- **第二のスキーマにはしない**: パースした結果は `parseMapIntent`(YAML検証)を経由せず、直接 `MapIntent` オブジェクトとして構築し、既存の `resolveLayers`/`buildStyle`/`renderMapView` パイプラインにそのまま流す(`main.ts` の `renderIntent` として共通化)。`#q=` は「Map Intentの別のワイヤー表現」であって、Map Intentという概念自体を割る競合スキーマではない。
+- **goalの自動補完**: `goal` が省略された場合(空文字列をセンチネルとして使う)、レイヤー解決後に各カタログのTileJSON `name` フィールド(または`required_styles`のラベル)から `"衛星SAR強度画像、火山基本図 を表示。"` のような要約を自動生成する。「Copy Map Intent」ボタンが表示中の内容と一致するよう、この補完の**後**にYAMLをシリアライズする(先に空goalでシリアライズしてしまうと、パネル表示とコピー内容が食い違う)。
+- **カバー範囲を限定する**: 複数カタログ・`required_styles`/`optional_styles`・`render_hints`・`cartographer_feedback` の往復は `#q=` ではサポートしない(必要なら `#m=` を使う)。単一カタログ・単純なレイヤー参照という最も一般的なユースケースに絞ることで、パーサーとフォーマットの単純さを保つ。
+- **ライブ反映は引き続き `#m=` を使う**: `#q=` はあくまで一回限りの入力チャネルであり、地図を開いた後の状態反映(pan/zoom/レイヤートグル、D2)は既存通り圧縮された `#m=` 形式で行う。`#q=` で開いたリンクも、最初の操作で `#m=` リンクに置き換わる。
+- **MapLibre自身の `hash` オプションとの名前空間の統制**: MapLibre GL JSは `new Map({hash: 'map', ...})` のようにMap自身の視点(center/zoom/bearing/pitch)を `#map=...` として自動的にURLへ書き込む組み込み機能を持つ(このプロジェクトでは無効のまま、`hash` オプションを一切渡していない)。将来この機能を有効化する可能性、あるいは他の実装との相互運用を考慮し、**spiccato自身が定義するハッシュキー(`m`・`q`、および将来追加するものすべて)は `map` という文字列を使わない**という統制を設ける。現在の2キーはこの制約を満たす(衝突なし)。
+
+**Consequences**: `src/shorthand.ts`・`src/shorthand.test.ts` を追加。`src/main.ts` の `handleSubmit` を `renderIntent`(共通処理)と薄いラッパーに分割し、`bootstrap()` が `#m=` → `#q=` → 貼り付けフォームの順で試すようになった。STAFF_PROMPT.md提案(別リポジトリ向け、提案のみ)を更新し、コード実行環境の有無に応じて `#q=`(既定・推奨)→`#m=`(高機能が必要な場合)→貼り付け(いずれも不可の場合)という3段階のフォールバックを明記した。
