@@ -13,6 +13,7 @@
 | [D5](#d5-ベースマップ地形が描画されない不具合mapliblreワーカースクリプトの欠落) | ベースマップ・地形が描画されない不具合(MapLibreワーカースクリプトの欠落) | Accepted | 2026-08-03 |
 | [D6](#d6-コード実行環境の無いgenai向けにq簡易フォーマットを追加する) | コード実行環境の無いGenAI向けに `#q=` 簡易フォーマットを追加する | Accepted | 2026-08-03 |
 | [D7](#d7-m-の非推奨化計画いつ何を条件に廃止するか) | `#m=` の非推奨化計画(いつ・何を条件に廃止するか) | Proposed | 2026-08-03 |
+| [D8](#d8-q-へのrender_hintscartographer_feedback拡張とライブ反映のq優先化d7条件1の実装) | `#q=` への render_hints/cartographer_feedback 拡張とライブ反映の `#q=` 優先化(D7条件1の実装) | Accepted | 2026-08-03 |
 
 ---
 
@@ -156,3 +157,25 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 4. 実際にコードから `#m=`/`src/fragment.ts` を削除するのは、案内変更後さらに様子を見てから、別途判断する(このADRでは「削除する」ことそのものは決定しない)。
 
 **Consequences**: 今回は文書化のみ。フォローアップとして「`#q=` への render_hints/feedback 拡張」が今後のタスクとして残る。次に着手する際は、この拡張を先に実装してから、`#m=` の非推奨化(STAFF_PROMPT案内の更新)に進むべきで、順序を逆にすると(先に`#m=`を弱める案内をしてから拡張する)、その間ライブ状態反映が実質使えない期間が生じる。
+
+この拡張自体は D8 で実装した。
+
+## D8: `#q=` への render_hints/cartographer_feedback 拡張とライブ反映の `#q=` 優先化(D7条件1の実装)
+
+**Status**: Accepted
+
+**Context**: D7 が obsolete化の条件1として挙げていた「`#q=` に render_hints 相当の数値パラメータを追加し、ライブ状態反映を `#q=` 単体で実現できるようにする」を実装した。
+
+**Decision**: `src/shorthand.ts` を拡張した:
+
+- `parseShorthandFragment` に `lat`/`lng`/`zoom`/`bearing`/`pitch`(`render_hints` 相当、`lat`/`lng` が両方揃って初めて `render_hints.center` を構築する ── `computeInitialView`(`style.ts`)自身が `hints?.center` の有無をゲートにしているのと同じ前提)と `missing`/`unrenderable`(`cartographer_feedback` 相当、comma区切りのID列挙)を追加した。いずれもバイト単位の変換が要らない、数値・IDのそのままの列挙(D6と同じ性質)。
+- 新設 `buildShorthandFragment(intent, live)` ── 書き込み側。現在の `MapIntent` と現在の地図の view(center/zoom/bearing/pitch)・missing/unrenderable から `#q=...` 文字列を合成する。intent の形が `#q=` の対応範囲に収まらない場合は `null` を返し、呼び出し側が `#m=` にフォールバックする設計:
+  - `active_catalogs` が2つ以上(複数カタログ)
+  - `required_styles`/`optional_styles` のいずれかが非空
+  - `sharing_policy` が `#q=` 自身の既定値(`{url_share: true, intent_share: true}`、`parseShorthandFragment` が常に生成する値)と異なる ── D7が名指しした「`sharing_policy` の明示的な上書きが表現できない」というギャップをそのまま安全側のガードにした。ここを見逃すと、`sharing_policy.url_share: false` を宣言した Map Intent が一度でも `#q=` へライブ反映されてしまうと、次に開いたときに advisory 表示(D2)が静かに消える、という後退が起きるため。
+- `src/render.ts` の `updateFragment()` を変更: まず `buildShorthandFragment` を試し、非 `null` なら同期的にそのまま `history.replaceState` する(圧縮も `fragmentGeneration` のレース対策も不要 ── 同期処理のため)。`null` の場合のみ、従来通り `encodeIntentFragment`(`#m=`、非同期)にフォールバックする。
+- **開き方に関わらず、形が収まる限り `#q=` を維持する**: D6時点の設計(「`#q=` で開いても最初の操作で `#m=` に変わる」)から転換し、`#m=` 経由(圧縮フラグメント)や貼り付けフォーム経由で開いた intent であっても、単一カタログ・スタイル無し・既定の `sharing_policy` という条件さえ満たせば、ライブ反映は `#q=` のまま行われる。実機検証(本番相当ビルド、`npm run preview`)で確認した具体例: 熊本地震の例(貼り付けフォームのデフォルト例、単一カタログ・`required_layers` のみ)を送信すると、初回描画直後の `updateFragment()` が即座に `#q=...&lat=...&lng=...&zoom=...&bearing=0&pitch=0` を生成し、`#m=` を経由しない。一方、火山土地条件図の例(`required_styles`/`optional_styles` を使用)は従来通り `#m=` にフォールバックすることも確認した。
+
+**検証方法についての教訓の追記**: 本セッションの自動化ブラウザツールでも `document.hidden: true` によりMapLibreの `requestAnimationFrame` ベースの描画は進まなかった(D5と同じ制約)。ただし今回変更した対象(URLフラグメントの合成ロジック)はレンダーループに依存しない ── `MapLibreMap` のコンストラクタは `center`/`zoom`/`bearing`/`pitch` を同期的に内部状態へ反映するため、`map.getCenter()`/`getZoom()` 等は描画の成否と無関係に初期化直後から正しい値を返す。この性質を利用し、`window.map`(グローバル公開されたMapインスタンス)ではなく `location.hash` の中身そのものを直接検証することで、レンダーループの制約を回避した(D5の教訓「目視確認より先にコンソールから直接確認する」の具体的な適用例)。
+
+**Consequences**: `src/shorthand.ts`/`src/shorthand.test.ts` を拡張(往復テスト、フォールバック条件ごとの `null` ケースを個別にテスト済み)。`src/render.ts`/`src/main.ts` のコメントを更新し、「ライブ反映は常に `#m=`」という記述を「形が収まる限り `#q=` を維持し、収まらない場合のみ `#m=` にフォールバックする」に改めた。D7 の残りの条件(2〜4、STAFF_PROMPT案内の更新と実際の `#m=` 削除の判断)はまだ着手していない ── 今回の実装により「複数カタログ/`required_styles`・`optional_styles`/`sharing_policy` 明示的上書き」という、より高度なケースだけが `#m=` を必要とする状態になったので、次にSTAFF_PROMPT案内を更新する際はこの3条件を明記すればよい。

@@ -8,15 +8,15 @@
 
 **現在地**: https://dwg7.github.io/spiccato/ で公開中、動作確認済み。
 
-## 現在の状態(2026-08-03時点)
+## 現在の状態(2026-08-03時点、`#q=` render_hints/cartographer_feedback拡張の実装後)
 
 ### 実装済み・動作確認済み
 
 - 中核パイプライン(`src/types.ts`/`mapIntent.ts`/`catalog.ts`/`style.ts`/`base-style.json`)はfaceless-cartographer(commit `a016206`)からvendoring、無改修
 - URLフラグメント、2形式:
-  - `#m=` — 圧縮(`CompressionStream` deflate-raw)+ base64url。フル機能(複数catalog、`required_styles`、`render_hints`等)。コード実行環境が無いと構築できない(D3)
-  - `#q=` — 無圧縮のquery string(`catalog=...&req=...&opt=...&bbox=...&goal=...`)。コード実行環境なしで手で組み立てられる(D6)。単一カタログ・単純なレイヤー参照のみ対応
-- ライブ状態反映: 地図を開いた後、pan/zoom/レイヤートグルのたびに`#m=`へ無条件で書き戻す(D2)。`#q=`で開いても、最初の操作で`#m=`に変わる
+  - `#m=` — 圧縮(`CompressionStream` deflate-raw)+ base64url。フル機能(複数catalog、`required_styles`、`render_hints`等)。コード実行環境が無いと構築できない(D3)。実際に必要なのは複数カタログ・`required_styles`/`optional_styles`・`sharing_policy`明示的上書きを使うケースのみに縮小した(D8)
+  - `#q=` — 無圧縮のquery string(`catalog=...&req=...&opt=...&bbox=...&goal=...`、D6)。**D8で拡張**: `lat=...&lng=...&zoom=...&bearing=...&pitch=...`(render_hints相当)と`missing=...&unrenderable=...`(cartographer_feedback相当)も、バイト単位の変換不要な数値・ID列挙のまま追加した
+- ライブ状態反映(`src/render.ts`の`updateFragment`): **D8で変更** — まず`#q=`(`buildShorthandFragment`)を試し、intentの形が収まる場合(単一カタログ・スタイル無し・`sharing_policy`が既定値)は同期的に`#q=`のまま書き戻す。収まらない場合のみ従来通り`#m=`(`encodeIntentFragment`、非同期)にフォールバックする。**開き方に関わらず**形が収まれば`#q=`を維持する(貼り付け/`#m=`経由で開いたintentでも、単一カタログ・スタイル無しなら`#q=`のまま反映される)。実機検証(本番相当ビルド)で、熊本地震の例(単一カタログ)は`#q=`のまま、火山土地条件図の例(`required_styles`使用)は従来通り`#m=`にフォールバックすることを確認済み
 - 実機検証: 熊本地震オルソ画像・全国津波浸水想定・御嶽山噴火(2014)衛星SAR画像のいずれも、リアルタイムでStaff役を演じてカタログ照会→Map Intent構築→リンク生成→本番サイトでの描画確認まで完了
 - GitHub Pages公開済み、`.github/workflows/build-docs.yml`でmainへのpush時に自動ビルド・デプロイ
 
@@ -33,13 +33,12 @@
 
 ### 未着手・フォローアップ
 
-1. **`#q=`をrender_hints/cartographer_feedback対応に拡張する**([DECISIONS.md](DECISIONS.md) D7)。現在ライブ状態反映(pan/zoom等)は常に`#m=`に書き戻る。`#q=`に`lat`/`lng`/`zoom`/`bearing`/`pitch`(数値そのまま)や`missing`(ID列挙)を追加すれば、単純なケースでは`#m=`が丸ごと不要になる可能性がある。**この拡張を実装してから**、`#m=`の非推奨化(次項)を進めること(順序が逆だとライブ反映が使えない空白期間が生じる)
-2. **`#m=`の非推奨化(obsolete化)** — 上記の拡張と実運用を経てから判断する。まだ実施しない(D7参照)
-3. **背景地図(bvmap)の表示/非表示トグル** — ユーザーから提案あり(「市街地では建物が主題画像を隠す場合がある」)。3D地形は既にMapLibre標準の`TerrainControl`でON/OFF可能(右上の山アイコン)。bvmap自体のトグルはまだ実装していない
-4. **`hfu/layers-martin`のSTAFF_PROMPT.md更新提案** — 適用していない(別リポジトリのため提案のみ)。提案文は下記の場所に保存している(セッション間で引き継がれない一時ディレクトリのため、次回セッションでは失われている可能性が高い。必要なら再作成すること):
+1. **`#m=`の非推奨化(obsolete化)** — D7の条件1(`#q=`のrender_hints/cartographer_feedback拡張)はD8で実装済み。残りの条件(実用上十分な期間の安定稼働確認 → STAFF_PROMPT案内の更新 → 実際のコード削除の判断)はまだ。急ぐ必要は無い(D7参照)
+2. **背景地図(bvmap)の表示/非表示トグル** — ユーザーから提案あり(「市街地では建物が主題画像を隠す場合がある」)。3D地形は既にMapLibre標準の`TerrainControl`でON/OFF可能(右上の山アイコン)。bvmap自体のトグルはまだ実装していない
+3. **`hfu/layers-martin`のSTAFF_PROMPT.md更新提案** — 適用していない(別リポジトリのため提案のみ)。提案文は下記の場所に保存している(セッション間で引き継がれない一時ディレクトリのため、消えていたら再作成が必要):
    `/private/tmp/claude-501/-Users-hfu-faceless-cartographer/a4d543ce-4068-4052-92eb-b85d46f8d7bd/scratchpad/staff_prompt_spiccato_proposal.md`
-   要旨: 「正しいやりとりの形」第3項・第5項の差し替え案、`#q=`(推奨)→`#m=`(高機能時)→貼り付け(最終手段)の3段階フォールバックの明記、`.json`付きカタログURL使用の推奨
-5. **`hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案** — 適用していない(同上、提案のみ)。保存場所:
+   要旨: 「正しいやりとりの形」第3項・第5項の差し替え案、`#q=`(推奨)→`#m=`(高機能時)→貼り付け(最終手段)の3段階フォールバックの明記、`.json`付きカタログURL使用の推奨。**D8を踏まえた更新が必要**: `#m=`が本当に必要なのは複数カタログ・`required_styles`/`optional_styles`・`sharing_policy`明示的上書きの3ケースだけだと明記できるようになった
+4. **`hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案** — 適用していない(同上、提案のみ)。保存場所:
    `/private/tmp/claude-501/-Users-hfu-faceless-cartographer/a4d543ce-4068-4052-92eb-b85d46f8d7bd/scratchpad/faceless_cartographer_decisions_addendum_proposal.md`
 
 ## リポジトリ構成
@@ -86,12 +85,12 @@ npm run preview -- --port 4321 --strictPort   # ローカル確認用
 
 ---
 
-`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` と `DECISIONS.md`(特にD1・D2・D6・D7)を読んで状況を把握してください。
+`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` と `DECISIONS.md`(特にD1・D2・D6・D7・D8)を読んで状況を把握してください。
 
 直近のフォローアップ候補(優先順は状況次第で判断してよい):
-1. `DECISIONS.md` D7で計画した通り、`#q=`(`src/shorthand.ts`)に render_hints相当(lat/lng/zoom/bearing/pitch)と cartographer_feedback相当(missing/unrenderable)を無圧縮のクエリパラメータとして追加する。実装後、ライブ状態反映(`src/render.ts`の`updateFragment`)も条件次第で`#q=`のまま維持できないか検討する
+1. `#m=`の非推奨化計画(D7)の続き — D7条件1(`#q=`のrender_hints/cartographer_feedback拡張)はD8で実装済み。残りはSTAFF_PROMPT案内の更新判断など、急ぎではない
 2. bvmap背景地図の表示/非表示トグルをUIに追加する(3D地形は`TerrainControl`で既にON/OFF可能)
-3. `hfu/layers-martin`のSTAFF_PROMPT.md更新提案、`hfu/faceless-cartographer`のDECISIONS.mdクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)
+3. `hfu/layers-martin`のSTAFF_PROMPT.md更新提案、`hfu/faceless-cartographer`のDECISIONS.mdクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)。D8を踏まえた更新が必要
 
 作業前に必ず `npm run build && npm run preview -- --port 4321 --strictPort` でローカルの本番相当ビルドを確認すること。ブラウザでの目視確認より先に、コンソールから `map.isSourceLoaded('<source-id>')` を直接呼ぶ方法を使うこと(HANDOVER.mdの教訓参照)。
 

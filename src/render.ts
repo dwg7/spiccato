@@ -11,6 +11,7 @@ import 'maplibre-gl-layer-control/style.css';
 import type { MapIntent, ResolvedLayer, ResolvedStyle } from './types.ts';
 import type { InitialView, MapLibreStyle } from './style.ts';
 import { encodeIntentFragment } from './fragment.ts';
+import { buildShorthandFragment } from './shorthand.ts';
 
 // UI structure (panel layout, layer checkboxes, legend, feature-click
 // popups, layer search, LayerControl integration) is ported from
@@ -557,16 +558,37 @@ export function renderMapView(
     }
   }
 
-  // DECISIONS.md D2/D3: the fragment is rewritten unconditionally, every
-  // time -- no per-session opt-in, no sharing_policy gate. encodeIntentFragment
-  // is async (it compresses via CompressionStream), so a generation counter
-  // discards a stale in-flight encode if a newer map change starts a fresh
-  // one before it resolves (e.g. a fast pan followed immediately by a layer
-  // toggle) -- otherwise the slower of the two could win and silently
-  // overwrite the URL with outdated state.
+  // DECISIONS.md D2/D3/D7: the fragment is rewritten unconditionally, every
+  // time -- no per-session opt-in, no sharing_policy gate. Prefer the plain
+  // #q= shorthand (D7's extension of D6: render_hints/cartographer_feedback
+  // as literal query params, no encoding) when the current intent's shape
+  // fits within it -- single catalog, no styles, no explicit sharing_policy
+  // override (buildShorthandFragment enforces this, see its own doc
+  // comment). That case is synchronous, so it skips the fragment-generation
+  // dance entirely. Only intents #q= can't represent (multiple catalogs,
+  // required_styles/optional_styles, sharing_policy overrides) fall back to
+  // #m=; encodeIntentFragment is async (it compresses via CompressionStream),
+  // so a generation counter discards a stale in-flight encode if a newer map
+  // change starts a fresh one before it resolves (e.g. a fast pan followed
+  // immediately by a layer toggle) -- otherwise the slower of the two could
+  // win and silently overwrite the URL with outdated state.
   let fragmentGeneration = 0;
   function updateFragment(): void {
     const generation = ++fragmentGeneration;
+    const center = map.getCenter();
+    const shorthand = buildShorthandFragment(intent, {
+      center: [center.lng, center.lat],
+      zoom: map.getZoom(),
+      bearing: map.getBearing(),
+      pitch: map.getPitch(),
+      missing,
+      unrenderable
+    });
+    if (shorthand !== null) {
+      history.replaceState(null, '', `${location.pathname}${location.search}${shorthand}`);
+      return;
+    }
+
     const yaml = buildCurrentIntentYaml();
     encodeIntentFragment(yaml)
       .then((encoded) => {

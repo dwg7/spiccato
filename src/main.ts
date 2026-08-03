@@ -84,10 +84,13 @@ async function handleSubmit(rawIntent: string): Promise<void> {
 //
 // Two decode formats are tried in order: the rich, compressed #m= format
 // (full Map Intent fidelity, needs code execution to construct -- D3), then
-// the plain #q= shorthand (no encoding at all, hand-writable -- D6). Either
-// way, once rendered, ongoing live reflection always writes back through
-// #m= (renderMapView), so a #q= link becomes a #m= link the moment the map
-// changes.
+// the plain #q= shorthand (no encoding at all, hand-writable -- D6, extended
+// with render_hints/cartographer_feedback query params in D7). Once
+// rendered, ongoing live reflection (renderMapView's updateFragment) stays
+// on #q= for as long as the intent's shape fits there (single catalog, no
+// styles, no explicit sharing_policy override) and only falls back to #m=
+// once it doesn't -- so a simple #q= link now stays a #q= link even as the
+// map is panned/zoomed/toggled.
 async function bootstrap(): Promise<void> {
   const decoded = await decodeIntentFragment(location.hash);
   if (decoded !== null) {
