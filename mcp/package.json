@@ -1,0 +1,29 @@
+{
+  "name": "spiccato-mcp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "MCP server exposing layers-martin/stars-optgeo catalog search and spiccato #q=/#m= link construction as tools (see ../DECISIONS.md D10).",
+  "bin": {
+    "spiccato-mcp": "./dist/stdio.js"
+  },
+  "scripts": {
+    "build": "tsup src/stdio.ts --format esm --target node22 --out-dir dist --clean",
+    "dev": "tsx src/stdio.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "js-yaml": "^5.2.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^26.1.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.5",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

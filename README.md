@@ -16,8 +16,8 @@ A Map Intent (a small YAML document describing what layers/styles to show, over 
 
 Two link formats are supported:
 
-- **`#q=`** — a plain query-string shorthand (`catalog=...&req=id1,id2&opt=id3&bbox=w,s,e,n`), no encoding step at all. This is the format a Staff agent without code execution should reach for: just literal, already-verified `source_id`s dropped into a template. See [DECISIONS.md](DECISIONS.md) D6.
-- **`#m=`** — the full Map Intent, `CompressionStream`-compressed and base64url-encoded, for cases the shorthand doesn't cover (multiple catalogs, `required_styles`, `render_hints`, a feedback round-trip). Needs a code-execution-capable Staff to construct. See [DECISIONS.md](DECISIONS.md) D3. This is also what the page itself keeps rewriting the address bar to as you interact with the map.
+- **`#q=`** — a plain query-string shorthand (`catalog=...&req=id1,id2&opt=id3&bbox=w,s,e,n&lat=...&lng=...&zoom=...`), no encoding step at all. This is the format a Staff agent without code execution should reach for: just literal, already-verified `source_id`s and plain numbers dropped into a template. See [DECISIONS.md](DECISIONS.md) D6/D8.
+- **`#m=`** — the full Map Intent, `CompressionStream`-compressed and base64url-encoded, for cases the shorthand doesn't cover (multiple catalogs, `required_styles`/`optional_styles`, an explicit `sharing_policy` override). Needs a code-execution-capable Staff to construct. See [DECISIONS.md](DECISIONS.md) D3. Live reflection (pan/zoom/layer toggles) stays on `#q=` when the intent's shape fits and only falls back to `#m=` otherwise (D8).
 
 A form for pasting a Map Intent by hand is still available as a fallback (e.g. for testing a Staff prompt manually, or when neither link format is buildable) — see the site itself.
 
@@ -30,6 +30,23 @@ npm run typecheck
 npm test
 npm run build       # outputs to docs/, served by GitHub Pages
 ```
+
+## MCP server (Staff as a tool, not a prompt)
+
+`mcp/` and `worker/` expose the same four tools (`list_catalogs`, `search_catalog`, `get_layer_info`, `build_spiccato_link`) over two transports, sharing the same core logic (`mcp/src/server.ts`, `mcp/src/catalog.ts`, `mcp/src/linkBuilder.ts`, which itself reuses `src/shorthand.ts`/`src/fragment.ts` unmodified):
+
+- **`mcp/`** — local stdio server for MCP hosts that spawn a local process (Claude Desktop/Code, Cursor, etc.):
+  ```bash
+  cd mcp && npm install && npm run build
+  # then point your MCP client at: node mcp/dist/stdio.js
+  ```
+- **`worker/`** — the same tools over remote Streamable HTTP, deployable to Cloudflare Workers (stateless — no Durable Objects, a fresh server per request, since all four tools are idempotent):
+  ```bash
+  cd worker && npm install && npm run dev     # local: POST to http://localhost:8787/mcp
+  npm run deploy                                # ships to <name>.workers.dev
+  ```
+
+This is the "MCP style" of using Staff (as opposed to pasting `STAFF_PROMPT.md` into a chat) — see [DECISIONS.md](DECISIONS.md) D10 for the rationale, and for why a tool-returned link is structurally immune to the hand-typed-URL mojibake failure mode D8/D9's own history ran into.
 
 ## Provenance
 

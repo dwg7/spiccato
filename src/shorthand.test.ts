@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildShorthandFragment, parseShorthandFragment } from './shorthand.ts';
+import { buildShorthandFragment, buildShorthandLink, parseShorthandFragment } from './shorthand.ts';
 import type { MapIntent } from './types.ts';
 
 describe('parseShorthandFragment', () => {
@@ -142,5 +142,46 @@ describe('buildShorthandFragment', () => {
   it('returns null when neither required_layers nor optional_layers is present', () => {
     const intent: MapIntent = { ...baseIntent, required_layers: undefined };
     expect(buildShorthandFragment(intent, live)).toBeNull();
+  });
+});
+
+describe('buildShorthandLink', () => {
+  const baseIntent: MapIntent = {
+    spec_version: 'map-intent/v2',
+    goal: 'テスト',
+    catalog_context: {
+      active_catalogs: [{ id: 'catalog', type: 'layers_txt', uri: 'https://hfu.github.io/layers-martin/catalog.json' }]
+    },
+    required_layers: [{ source_id: 'lcmfc2' }],
+    sharing_policy: { url_share: true, intent_share: true },
+    provenance: { generated_by: 'test', generated_at: '2026-08-03T00:00:00Z', intent_id: 'test' }
+  };
+
+  it('builds a #q= link with no view params when render_hints is absent (cold start, spiccato-mcp use case)', () => {
+    const link = buildShorthandLink(baseIntent);
+    expect(link).not.toBeNull();
+    expect(link!.startsWith('#q=')).toBe(true);
+    const roundTripped = parseShorthandFragment(link!);
+    expect(roundTripped!.required_layers).toEqual([{ source_id: 'lcmfc2' }]);
+    expect(roundTripped!.render_hints).toBeUndefined();
+    expect(roundTripped!.cartographer_feedback).toBeUndefined();
+  });
+
+  it('honors intent.render_hints when the caller already pinned an initial view', () => {
+    const intent: MapIntent = { ...baseIntent, render_hints: { center: [130.6, 32.5], zoom: 11 } };
+    const link = buildShorthandLink(intent);
+    const roundTripped = parseShorthandFragment(link!);
+    expect(roundTripped!.render_hints).toEqual({ center: [130.6, 32.5], zoom: 11 });
+  });
+
+  it('returns null under the same fitness conditions as buildShorthandFragment', () => {
+    expect(buildShorthandLink({ ...baseIntent, required_styles: [{ style_id: 'vlcm' }] })).toBeNull();
+    expect(
+      buildShorthandLink({
+        ...baseIntent,
+        catalog_context: { active_catalogs: [...baseIntent.catalog_context.active_catalogs, { id: 'b', type: 'martin', uri: 'https://example.org/b' }] }
+      })
+    ).toBeNull();
+    expect(buildShorthandLink({ ...baseIntent, sharing_policy: { url_share: false, intent_share: true } })).toBeNull();
   });
 });

@@ -145,12 +145,12 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
   return intent;
 }
 
-// The write side of the same round-trip: serializes the *current* live map
-// state (center/zoom/bearing/pitch, current missing/unrenderable) back into
-// "#q=..." wire format, for render.ts's updateFragment to use in place of
-// #m= when it can. Returns null when the intent's shape falls outside what
-// #q= can represent (DECISIONS.md D6/D7) -- callers must fall back to
-// encodeIntentFragment (#m=) in that case:
+// Shared by buildShorthandFragment (live reflection) and buildShorthandLink
+// (cold-start construction, spiccato-mcp): checks whether intent's shape
+// fits within what #q= can represent at all, and if so builds the params
+// common to both (catalog/req/opt/bbox/name/goal). Returns null when the
+// intent falls outside #q='s scope (DECISIONS.md D6/D7) -- callers must
+// fall back to encodeIntentFragment (#m=) in that case:
 //   - more than one active catalog
 //   - any required_styles/optional_styles (no wire representation at all)
 //   - an explicit sharing_policy that isn't #q='s own implicit default
@@ -162,10 +162,7 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
 // per-catalog `version` -- current example intents don't exercise the first
 // two, and D6 already treats source_id-only layer refs (no label, no
 // per-catalog version pin) as an accepted simplification of this format.
-export function buildShorthandFragment(
-  intent: MapIntent,
-  live: { center: [number, number]; zoom: number; bearing: number; pitch: number; missing: string[]; unrenderable: string[] }
-): string | null {
+function buildShorthandParams(intent: MapIntent): URLSearchParams | null {
   const catalogs = intent.catalog_context.active_catalogs;
   if (catalogs.length !== 1) return null;
   if ((intent.required_styles?.length ?? 0) > 0 || (intent.optional_styles?.length ?? 0) > 0) return null;
@@ -185,6 +182,19 @@ export function buildShorthandFragment(
   if (intent.area?.bbox) params.set('bbox', intent.area.bbox.join(','));
   if (intent.area?.name) params.set('name', intent.area.name);
   if (intent.goal) params.set('goal', intent.goal);
+  return params;
+}
+
+// The write side of the live-reflection round-trip: serializes the
+// *current* live map state (center/zoom/bearing/pitch, current
+// missing/unrenderable) back into "#q=..." wire format, for render.ts's
+// updateFragment to use in place of #m= when it can.
+export function buildShorthandFragment(
+  intent: MapIntent,
+  live: { center: [number, number]; zoom: number; bearing: number; pitch: number; missing: string[]; unrenderable: string[] }
+): string | null {
+  const params = buildShorthandParams(intent);
+  if (params === null) return null;
 
   params.set('lat', String(live.center[1]));
   params.set('lng', String(live.center[0]));
@@ -193,6 +203,30 @@ export function buildShorthandFragment(
   params.set('pitch', String(live.pitch));
   if (live.missing.length > 0) params.set('missing', live.missing.join(','));
   if (live.unrenderable.length > 0) params.set('unrenderable', live.unrenderable.join(','));
+
+  return `${HASH_PREFIX}${params.toString()}`;
+}
+
+// Cold-start counterpart to buildShorthandFragment: builds a "#q=" link for
+// an intent with no live map view yet (nobody has panned/zoomed) -- e.g.
+// spiccato-mcp's build_spiccato_link tool constructing a first-open link
+// (see ../mcp/src/linkBuilder.ts). Honors intent.render_hints if the caller
+// already set one (so a Staff-style caller can still pin an initial view),
+// but never writes cartographer_feedback -- there's nothing to report yet
+// on a link nobody has opened. Returns null under the same conditions as
+// buildShorthandFragment (see buildShorthandParams above).
+export function buildShorthandLink(intent: MapIntent): string | null {
+  const params = buildShorthandParams(intent);
+  if (params === null) return null;
+
+  const hints = intent.render_hints;
+  if (hints?.center) {
+    params.set('lng', String(hints.center[0]));
+    params.set('lat', String(hints.center[1]));
+    if (hints.zoom !== undefined) params.set('zoom', String(hints.zoom));
+    if (hints.bearing !== undefined) params.set('bearing', String(hints.bearing));
+    if (hints.pitch !== undefined) params.set('pitch', String(hints.pitch));
+  }
 
   return `${HASH_PREFIX}${params.toString()}`;
 }

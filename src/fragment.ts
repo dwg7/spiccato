@@ -25,9 +25,15 @@ const FORMAT_DEFLATE = 'z';
 const FORMAT_PLAIN = 'p';
 
 // Pinned to the ArrayBuffer-backed variant throughout (rather than the bare,
-// SharedArrayBuffer-permitting `Uint8Array`) -- that's what TextEncoder,
-// Uint8Array.from, and `new Uint8Array(n)` all actually produce, and it's
-// what BufferSource-typed DOM APIs (CompressionStream et al.) require.
+// SharedArrayBuffer-permitting `Uint8Array`) -- that's what `Uint8Array.from`
+// and `new Uint8Array(n)` always produce, and it's what BufferSource-typed
+// DOM APIs (CompressionStream et al.) require under the browser SPA's DOM
+// lib. This module now also type-checks under mcp/'s @types/node and
+// worker/'s @cloudflare/workers-types (DECISIONS.md D10); those declare
+// TextEncoder.encode()'s return as the wider Uint8Array<ArrayBufferLike>, so
+// the one call site that crosses that boundary (encodeIntentFragment below)
+// asserts it into Bytes explicitly rather than loosening this alias for
+// every call site in the module.
 type Bytes = Uint8Array<ArrayBuffer>;
 
 function toBase64Url(bytes: Bytes): string {
@@ -83,7 +89,7 @@ async function inflateRaw(bytes: Bytes): Promise<Bytes> {
 // prepend the prefix themselves. Always succeeds -- degrades to the
 // uncompressed "p" format if CompressionStream isn't available or fails.
 export async function encodeIntentFragment(yaml: string): Promise<string> {
-  const bytes = new TextEncoder().encode(yaml);
+  const bytes = new TextEncoder().encode(yaml) as Bytes;
   if (typeof CompressionStream !== 'undefined') {
     try {
       const compressed = await deflateRaw(bytes);

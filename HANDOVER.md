@@ -8,7 +8,9 @@
 
 **現在地**: https://dwg7.github.io/spiccato/ で公開中、動作確認済み。
 
-## 現在の状態(2026-08-03時点、`#q=` render_hints/cartographer_feedback拡張の実装後)
+## 現在の状態(2026-08-03時点、MCPスタイル(stdio・Workers版)実装後)
+
+**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。**実装順序はstdio → Workers → 源内 → (完成後に)オープンウェブの分解を深める**、と明確化済み。MCPスタイル(stdio・Workers)はD10で実装完了。次は源内スタイル。
 
 ### 実装済み・動作確認済み
 
@@ -19,6 +21,7 @@
 - ライブ状態反映(`src/render.ts`の`updateFragment`): **D8で変更** — まず`#q=`(`buildShorthandFragment`)を試し、intentの形が収まる場合(単一カタログ・スタイル無し・`sharing_policy`が既定値)は同期的に`#q=`のまま書き戻す。収まらない場合のみ従来通り`#m=`(`encodeIntentFragment`、非同期)にフォールバックする。**開き方に関わらず**形が収まれば`#q=`を維持する(貼り付け/`#m=`経由で開いたintentでも、単一カタログ・スタイル無しなら`#q=`のまま反映される)。実機検証(本番相当ビルド)で、熊本地震の例(単一カタログ)は`#q=`のまま、火山土地条件図の例(`required_styles`使用)は従来通り`#m=`にフォールバックすることを確認済み
 - 実機検証: 熊本地震オルソ画像・全国津波浸水想定・御嶽山噴火(2014)衛星SAR画像のいずれも、リアルタイムでStaff役を演じてカタログ照会→Map Intent構築→リンク生成→本番サイトでの描画確認まで完了
 - GitHub Pages公開済み、`.github/workflows/build-docs.yml`でmainへのpush時に自動ビルド・デプロイ
+- **MCPスタイル(D10、2026-08-03実装)**: `mcp/`(ローカルstdio版)・`worker/`(Cloudflare Workers版、Streamable HTTP・ステートレス)の2トランスポート。共通ロジック(`mcp/src/server.ts`/`catalog.ts`/`linkBuilder.ts`)は完全共有、`src/shorthand.ts`に`buildShorthandLink`(ライブビュー不要な#q=構築、`render.ts`用の`buildShorthandFragment`とロジック共有)を新設して再利用。4ツール(`list_catalogs`/`search_catalog`/`get_layer_info`/`build_spiccato_link`)。stdioは子プロセス越しの生JSON-RPCで、Workersは`wrangler dev`+`curl`で、それぞれ`initialize`→`tools/call`の実通信を確認済み。生成された`#q=`/`#m=`両方のリンクを本番相当ビルドで開いて描画確認済み(欠落レイヤー無し、コンソールエラー無し)
 
 ### 直近で直したバグ(重要、再発に注意)
 
@@ -33,22 +36,25 @@
 
 ### 未着手・フォローアップ
 
-1. **`#m=`の非推奨化(obsolete化)** — D7の条件1(`#q=`のrender_hints/cartographer_feedback拡張)はD8で実装済み。残りの条件(実用上十分な期間の安定稼働確認 → STAFF_PROMPT案内の更新 → 実際のコード削除の判断)はまだ。急ぐ必要は無い(D7参照)
-2. **`hfu/layers-martin`のSTAFF_PROMPT.md更新提案** — 適用していない(別リポジトリのため提案のみ)。提案文は下記の場所に保存している(セッション間で引き継がれない一時ディレクトリのため、消えていたら再作成が必要):
+1. **源内スタイル(次のステップ)** — `hfu/layers-martin`に`GENNAI_PROMPT.md`(生成スクリプト`scripts/build-gennai-prompt.mjs`付き)を追加する計画。目標8,000字、layers-martin+stars-optgeoから精選(全件は物理的に不可能、実測済み)。計画の詳細は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`のPhase 2節、根拠はD10参照。ユーザーが36時間以内(2026-08-05頃まで)に実インスタンスで文字数上限を確認予定 — 確認結果があれば設計に反映すること
+2. **オープンウェブスタイルの深掘り** — 源内完成後に着手。「決定的検索(`mcp/src/catalog.ts`のブラウザ移植)+極小LLMでの意図解釈(検索キーワード抽出のみ)+決定的ジオコーディング+人間が候補を選ぶUI」という分解の設計メモは計画ファイルに記録済み。まだプロトタイプ段階にすら入っていない
+3. **`#m=`の非推奨化(obsolete化)** — D7の条件1(`#q=`のrender_hints/cartographer_feedback拡張)はD8で実装済み。残りの条件(実用上十分な期間の安定稼働確認 → STAFF_PROMPT案内の更新 → 実際のコード削除の判断)はまだ。急ぐ必要は無い(D7参照)
+4. **`hfu/layers-martin`のSTAFF_PROMPT.md更新提案** — 適用していない(別リポジトリのため提案のみ)。提案文は下記の場所に保存している(セッション間で引き継がれない一時ディレクトリのため、消えていたら再作成が必要):
    `/private/tmp/claude-501/-Users-hfu-faceless-cartographer/a4d543ce-4068-4052-92eb-b85d46f8d7bd/scratchpad/staff_prompt_spiccato_proposal.md`
-   要旨: 「正しいやりとりの形」第3項・第5項の差し替え案、`#q=`(推奨)→`#m=`(高機能時)→貼り付け(最終手段)の3段階フォールバックの明記、`.json`付きカタログURL使用の推奨。**D8を踏まえた更新が必要**: `#m=`が本当に必要なのは複数カタログ・`required_styles`/`optional_styles`・`sharing_policy`明示的上書きの3ケースだけだと明記できるようになった
-3. **`hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案** — 適用していない(同上、提案のみ)。保存場所:
+   要旨: 「正しいやりとりの形」第3項・第5項の差し替え案、`#q=`(推奨)→`#m=`(高機能時)→貼り付け(最終手段)の3段階フォールバックの明記、`.json`付きカタログURL使用の推奨。**D8・D10を踏まえた更新が必要**: `#m=`が本当に必要なのは複数カタログ・`required_styles`/`optional_styles`・`sharing_policy`明示的上書きの3ケースだけだと明記できるようになった。**MCPスタイル(D10)の案内も追加すべき** — コード実行環境が無くても`#q=`が使えるようになった今、STAFF_PROMPT.mdの3段階フォールバックに「MCP対応クライアントなら`mcp/`/`worker/`のツールを使う」という4つ目の選択肢を足すのが筋が良い
+5. **`hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案** — 適用していない(同上、提案のみ)。保存場所:
    `/private/tmp/claude-501/-Users-hfu-faceless-cartographer/a4d543ce-4068-4052-92eb-b85d46f8d7bd/scratchpad/faceless_cartographer_decisions_addendum_proposal.md`
 
 ### 完了(参考)
 
 - **背景地図(bvmap)の表示/非表示トグル**(D9、2026-08-03実装) — パネルに「背景地図(bvmap)を表示」チェックボックス(既定ON)を追加。既存の`layerIdsBySourceId`/`[data-layer-toggle]`汎用ハンドラ(`src/render.ts`)をそのまま流用でき、新規JSロジックは不要だった(HTMLテンプレートへの1ブロック追加のみ)。可視状態はURLに永続化しない(既存の主題レイヤートグルと同じ挙動)。3D地形は従来通り`TerrainControl`(右上の山アイコン)でON/OFF。
+- **MCPスタイル stdio・Workers版**(D10、2026-08-03実装) — 上記参照。
 
 ## リポジトリ構成
 
 ```
 spiccato/
-├── DECISIONS.md          # ADR、D1〜D7。設計判断の正
+├── DECISIONS.md          # ADR、D1〜D10。設計判断の正
 ├── HANDOVER.md            # このファイル
 ├── README.md
 ├── index.html
@@ -56,15 +62,21 @@ spiccato/
 │   ├── types.ts / mapIntent.ts / catalog.ts / style.ts / base-style.json
 │   │                      # vendored from faceless-cartographer、無改修(D1)
 │   ├── dads-components.css
-│   ├── fragment.ts        # #m= コーデック(圧縮)、D3
-│   ├── shorthand.ts       # #q= コーデック(無圧縮)、D6
+│   ├── fragment.ts        # #m= コーデック(圧縮)、D3。mcp/worker双方から再利用(D10)
+│   ├── shorthand.ts       # #q= コーデック(無圧縮)、D6/D8。buildShorthandLinkはD10でmcp/worker用に新設
 │   ├── main.ts             # bootstrap: #m= → #q= → 貼り付けフォームの順で試す
-│   ├── render.ts           # UI、ライブ状態反映(#m=へ無条件で書き戻す)
+│   ├── render.ts           # UI、ライブ状態反映(D8: #q=優先、収まらなければ#m=)
 │   └── *.test.ts
 ├── public/
 │   ├── .nojekyll
 │   ├── maplibre-gl-worker.mjs(.map)   # node_modules由来、手動vendoring(D5)
 │   └── maplibre-gl-shared.mjs(.map)   # 同上
+├── mcp/                    # MCPサーバー、ローカルstdio版(D10)
+│   ├── src/{catalog,linkBuilder,server,stdio}.ts
+│   └── test/
+├── worker/                 # MCPサーバー、Cloudflare Workers版(D10、mcp/src/server.tsを再利用)
+│   ├── src/index.ts
+│   └── wrangler.toml
 ├── scripts/fetch-staff-prompt.mjs   # prebuildフック(D19 in faceless-cartographer由来)
 └── .github/workflows/build-docs.yml
 ```
@@ -88,14 +100,16 @@ npm run preview -- --port 4321 --strictPort   # ローカル確認用
 
 ---
 
-`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` と `DECISIONS.md`(特にD1・D2・D6・D7・D8・D9)を読んで状況を把握してください。
+`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` と `DECISIONS.md`(特にD1・D2・D6・D7・D8・D9・D10)、および計画ファイル `/Users/hfu/.claude/plans/scalable-snacking-spring.md`(Staffの複数スタイル導入計画、残っていれば)を読んで状況を把握してください。
 
-直近のフォローアップ候補(優先順は状況次第で判断してよい):
-1. `#m=`の非推奨化計画(D7)の続き — D7条件1(`#q=`のrender_hints/cartographer_feedback拡張)はD8で実装済み。残りはSTAFF_PROMPT案内の更新判断など、急ぎではない
-2. `hfu/layers-martin`のSTAFF_PROMPT.md更新提案、`hfu/faceless-cartographer`のDECISIONS.mdクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)。D8を踏まえた更新が必要
+直近のフォローアップ候補(優先順は状況次第で判断してよいが、実装順序自体が質に影響するという判断で「MCPスタイル完成 → 源内 → オープンウェブの深掘り」の順に進めている最中):
+1. **源内スタイル**(次のステップ) — `hfu/layers-martin`に`GENNAI_PROMPT.md`+生成スクリプトを追加。8,000字予算、layers-martin+stars-optgeoから精選(全件は不可能、実測済み)。ユーザーが実インスタンスで文字数上限を確認済みなら、その結果を反映すること
+2. オープンウェブスタイルの「決定的検索+極小LLM意図解釈」分解の深掘り(源内完成後)
+3. `#m=`の非推奨化計画(D7)の続き — 急ぎではない
+4. `hfu/layers-martin`のSTAFF_PROMPT.md更新提案、`hfu/faceless-cartographer`のDECISIONS.mdクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)。D8・D10を踏まえた更新が必要(MCPスタイルの案内追加も)
 
-bvmap背景地図の表示/非表示トグルはD9で実装済み。
+bvmap背景地図の表示/非表示トグル(D9)、MCPスタイルstdio・Workers版(D10)は実装済み。
 
-作業前に必ず `npm run build && npm run preview -- --port 4321 --strictPort` でローカルの本番相当ビルドを確認すること。ブラウザでの目視確認より先に、コンソールから `map.isSourceLoaded('<source-id>')` を直接呼ぶ方法を使うこと(HANDOVER.mdの教訓参照)。
+作業前に必ず `npm run build && npm run preview -- --port 4321 --strictPort` でローカルの本番相当ビルドを確認すること。ブラウザでの目視確認より先に、コンソールから `map.isSourceLoaded('<source-id>')` を直接呼ぶ方法を使うこと(HANDOVER.mdの教訓参照)。`mcp/`・`worker/`はそれぞれ独立した`npm install`が必要(ルートの`npm install`ではインストールされない)。
 
 ---

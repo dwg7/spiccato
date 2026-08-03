@@ -1,0 +1,22 @@
+{
+  "name": "spiccato-mcp-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Remote (Streamable HTTP) MCP transport for the same spiccato-mcp tools as ../mcp, deployed on Cloudflare Workers (see ../DECISIONS.md D10).",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "js-yaml": "^5.2.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260801.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.118.0"
+  }
+}

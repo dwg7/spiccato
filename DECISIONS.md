@@ -15,6 +15,7 @@
 | [D7](#d7-m-の非推奨化計画いつ何を条件に廃止するか) | `#m=` の非推奨化計画(いつ・何を条件に廃止するか) | Proposed | 2026-08-03 |
 | [D8](#d8-q-へのrender_hintscartographer_feedback拡張とライブ反映のq優先化d7条件1の実装) | `#q=` への render_hints/cartographer_feedback 拡張とライブ反映の `#q=` 優先化(D7条件1の実装) | Accepted | 2026-08-03 |
 | [D9](#d9-背景地図bvmapの表示非表示トグル) | 背景地図(bvmap)の表示/非表示トグル | Accepted | 2026-08-03 |
+| [D10](#d10-staffの複数スタイル源内mcpオープンウェブと-mcpスタイルstdioworkers版の実装) | Staffの複数スタイル(源内・MCP・オープンウェブ)と、MCPスタイル(stdio・Workers版)の実装 | Accepted(MCP部分)/Proposed(源内・オープンウェブ) | 2026-08-03 |
 
 ---
 
@@ -194,3 +195,33 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 **検証**: 本番相当ビルド(`npm run build && npm run preview`)で実機確認。チェックボックスの表示、クリックによるON/OFF切り替え、コンソールエラー無し(約120層への`setLayoutProperty`呼び出しが例外を投げないこと)、トグル後もURLフラグメントが正しい`#q=`のまま(D8)であることを確認した。
 
 **Consequences**: `src/render.ts` のみ変更(HTMLテンプレートに1ブロック追加)。新規テストは追加していない ── この変更は純粋にDOM生成(`renderMapView`内のテンプレート文字列)であり、既存の `render.test.ts` は副作用のない純粋関数(`buildPopupHtml`等)のみを対象にしているため、同種のテストを書くには`MapLibreMap`のモックが要る(既存コードもその種のテストを持たない)。実機ブラウザ確認で代替した。
+
+## D10: Staffの複数スタイル(源内・MCP・オープンウェブ)と、MCPスタイル(stdio・Workers版)の実装
+
+**Status**: Accepted(MCPスタイルのstdio/Workers実装部分)/ Proposed(源内スタイル・オープンウェブスタイルは計画のみ、未実装)
+
+**Context**: 現状、Staff(`UNopenGIS/staccato-spec`におけるMap Intent生成役)を生成AIに担わせる手段は、`hfu/layers-martin`の`STAFF_PROMPT.md`(約34,500字)をコピー&ペーストして渡す1通りしかなかった(「ノーマルスタイル」)。これには実務上の摩擦がある: 毎回プロンプトを探して貼る手間、`source_id`捏造のリスク(カタログをその場で引けない環境では特に)、そして本セッションで直接踏んだ不具合 ── 長い日本語の`goal`を含む`#q=`リンクをチャットで手渡すと、伝送経路のどこかでパーセントエンコードの境界を無視した打ち切りが起き、mojibake化する(D8/D9のfeedbackメモリ参照)。
+
+ユーザーから、ノーマルスタイルに加えて3つの追加スタイルのフィージビリティ研究と実装の依頼があった:
+
+1. **源内スタイル**: システムプロンプトは保存できるがインターネットに一切アクセスできないAI(デジタル庁のガバメントAI「源内」、AWS製OSS`Generative AI Use Cases (GenU)`ベース)向けに、カタログ情報を圧縮してプロンプトに埋め込む。
+2. **MCPスタイル**: MCP対応の生成AI(Claude Desktop/Code、Cursor等)にツールとしてカタログ検索・リンク構築機能を供給する。
+3. **オープンウェブスタイル**: Staff自体をブラウザ内で完結する最小LLMとして実装し、spiccatoと同じくGitHub Pagesでホストする。
+
+検討の過程で「MCPサーバーを完全にスタティックに(GitHub Pagesのように)実装できないか」という問いが出たが、これは原理的に不可能と判断した: MCPの本体はJSON-RPCで、`tools/call`の引数(例: 検索クエリ)に応じてその場で計算した応答を返す必要があり、静的ファイル配信(URLパスに対して固定バイト列を返すだけ)ではPOSTボディの中身に応じた応答の出し分けができない。一方、「運用を持ちたくない」という志向であれば、Cloudflare Workers等のエッジ関数(gitにpushしたら勝手にデプロイされ、常時起動のサーバーが要らない)がその感覚に近いことが分かり、ユーザーの指示で**ローカルstdio版とCloudflare Workers版を、共有できるロジックは共有しながら同時に実装する**方針になった。
+
+優先順位はユーザー確認済み: MCPスタイル(stdio・Workers両方)を先に実装し完成させてから源内スタイル、その後(Phase 1・2完成後)に限ってオープンウェブスタイルの「決定的検索+極小LLMでの意図解釈」という分解を深める。作業順序自体が質に影響するという判断による。詳細な検討過程・確認事項は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(計画ファイル)に記録した。
+
+**Decision(MCPスタイル、実装済み)**:
+
+`dwg7/spiccato`と同一リポジトリに`mcp/`(stdio版)・`worker/`(Cloudflare Workers版)を新設した。別リポジトリに切り出さなかった理由: `src/shorthand.ts`・`src/fragment.ts`はどちらも環境非依存の純粋関数(`CompressionStream`/`DecompressionStream`はNode 18+・Cloudflare Workers双方で標準搭載)であり、別リポジトリへのvendoringはこのプロジェクトが既に何度も踏んだ「コピーが元と乖離する」問題(D1・D5)を再現するだけになる。同一リポジトリ・相対importなら3箇所(SPA・stdio・Workers)に自動的に反映される。
+
+- **`src/shorthand.ts`に`buildShorthandLink(intent)`を新設**。既存の`buildShorthandFragment(intent, live)`(D8、ライブ反映用、地図の現在ビューが前提)から、共通部分(intentの形が`#q=`に収まるかの判定+catalog/req/opt/bbox/name/goalの組み立て)を`buildShorthandParams`として抽出し、`buildShorthandFragment`はそこに`live`view由来のlat/lng/zoom/bearing/pitch/missing/unrenderableを足すだけ、新設の`buildShorthandLink`は`intent.render_hints`があればそれだけを足す(ライブビュー不要)、という構成にした。地図を一度も開いていない「これから開くリンク」を構築する、という新しいユースケース(spiccato-mcp)に対応するための必然的な拡張であり、`render.ts`側の既存動作(D8)は変更していない。
+- **`mcp/src/server.ts`にトランスポート非依存のファクトリ`createSpiccatoServer(): McpServer`を実装**。4ツール(`list_catalogs`/`search_catalog`/`get_layer_info`/`build_spiccato_link`)を登録する。`mcp/src/catalog.ts`(カタログの実`fetch`+name/path/id部分一致検索、tiles/styles両対応)と`mcp/src/linkBuilder.ts`(`buildShorthandLink`優先・収まらなければ`fragment.ts`の`encodeIntentFragment`で`#m=`にフォールバック、`render.ts`の`updateFragment`(D8)と同じ判定ロジック)を呼ぶ。
+- **`mcp/src/stdio.ts`**: `StdioServerTransport`に接続するだけのローカル実行用エントリポイント。`tsup`でNode向けにバンドル(`mcp/dist/stdio.js`)。
+- **`worker/src/index.ts`**: 同じ`createSpiccatoServer()`を、SDKの`WebStandardStreamableHTTPServerTransport`(Web標準Request/Response、SDK自身のドキュメントコメントに"Cloudflare Workers usage"として明記されている)に接続する。**ステートレスモード**(`sessionIdGenerator: undefined`)を選択した ── 4ツールはすべて呼び出しごとに独立した無状態操作であり、セッション間で共有すべき状態が無いため、Cloudflareの`agents`パッケージ(Durable Objectsベースのセッション管理)は使わず、リクエストごとに`McpServer`とtransportを新規生成する最小構成にした。
+- **型の互換性問題への対処**: `src/fragment.ts`の内部型`Bytes`(`Uint8Array<ArrayBuffer>`)は、DOM lib(SPA)・`@types/node`(`mcp/`)・`@cloudflare/workers-types`(`worker/`)という3種類のアンビエント型宣言の下で同時にコンパイルされることになった結果、`TextEncoder.encode()`の宣言される戻り値の型が環境によって異なる(Workers型では`Uint8Array<ArrayBufferLike>`)ことが判明した。`Bytes`自体を緩めると今度はDOM lib側の`CompressionStream`の引数型(`ArrayBufferView<ArrayBuffer>`)を満たせなくなるため、`Bytes`の定義はDOM lib向けのまま維持し、環境差が入り込む唯一の境界(`encodeIntentFragment`内の`new TextEncoder().encode(yaml)`の直後)にだけ`as Bytes`の明示キャストを置いた。実行時の挙動には影響しない、型宣言の食い違いを吸収するための最小限の措置。
+
+**実機検証**: stdio版は`tsup`でビルドし、`StdioServerTransport`に対して生のJSON-RPCメッセージ(`initialize`→`tools/list`→`tools/call`)を子プロセス越しに送受信するテストスクリプトで、`search_catalog("地形分類")`→`build_spiccato_link`という一連の流れが実際のネットワーク越しに動作し、正しい`#q=`リンクを返すことを確認した。Workers版は`wrangler dev`でローカル起動し、同じ流れを`curl`でのHTTP POSTで再現、さらに複数カタログ(`required_styles`使用)で`#m=`フォールバックが正しく`deflate-raw`圧縮込みで動作することも確認した(Cloudflare Workersの`CompressionStream`が`'deflate-raw'`フォーマットに対応していることも合わせて確認できた)。どちらの経路で生成したリンクも、本番相当ビルド(`npm run preview`)で実際に開いて欠落レイヤー無し・コンソールエラー無しで描画されることを確認済み。
+
+**Consequences**: `mcp/`・`worker/`をリポジトリに追加(それぞれ独立した`package.json`、Viteのビルド対象外)。`mcp/test/`にVitestテスト13件(`catalog.test.ts`・`linkBuilder.test.ts`、`fetch`をモック化)を追加。`src/shorthand.ts`の関数分割はリファクタリングであり、既存の`buildShorthandFragment`の外部動作(D8で確立した契約)は変更していない ── `src/shorthand.test.ts`に`buildShorthandLink`向けのテストを追加し、既存テストは全てそのまま通過することを確認した。源内スタイル・オープンウェブスタイルは計画段階のまま(別セッションで着手、`/Users/hfu/.claude/plans/scalable-snacking-spring.md`参照)。
