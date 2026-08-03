@@ -359,6 +359,14 @@ export function renderMapView(
       ${missingNotice}
       ${unrenderableNotice}
       ${urlShareAdvisory}
+      <div class="background-toggle" style="margin: .5rem 0;">
+        <label class="dads-checkbox" data-size="sm">
+          <span class="dads-checkbox__checkbox">
+            <input class="dads-checkbox__input" type="checkbox" data-layer-toggle="bvmap" checked>
+          </span>
+          <span class="dads-checkbox__label">背景地図(bvmap)を表示</span>
+        </label>
+      </div>
       ${resolved.length > 0 || resolvedStyles.length > 0 ? `
       <div class="layer-search-wrapper" style="margin: .5rem 0;">
         <input type="text" id="layer-search" placeholder="🔍 Search layers..." class="dads-text-input" style="width: 100%; font-size: 0.88rem; padding: 0.4rem 0.6rem; border: 1px solid rgba(0, 0, 0, 0.2); border-radius: var(--border-radius-4);">

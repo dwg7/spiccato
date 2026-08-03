@@ -14,6 +14,7 @@
 | [D6](#d6-コード実行環境の無いgenai向けにq簡易フォーマットを追加する) | コード実行環境の無いGenAI向けに `#q=` 簡易フォーマットを追加する | Accepted | 2026-08-03 |
 | [D7](#d7-m-の非推奨化計画いつ何を条件に廃止するか) | `#m=` の非推奨化計画(いつ・何を条件に廃止するか) | Proposed | 2026-08-03 |
 | [D8](#d8-q-へのrender_hintscartographer_feedback拡張とライブ反映のq優先化d7条件1の実装) | `#q=` への render_hints/cartographer_feedback 拡張とライブ反映の `#q=` 優先化(D7条件1の実装) | Accepted | 2026-08-03 |
+| [D9](#d9-背景地図bvmapの表示非表示トグル) | 背景地図(bvmap)の表示/非表示トグル | Accepted | 2026-08-03 |
 
 ---
 
@@ -179,3 +180,17 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 **検証方法についての教訓の追記**: 本セッションの自動化ブラウザツールでも `document.hidden: true` によりMapLibreの `requestAnimationFrame` ベースの描画は進まなかった(D5と同じ制約)。ただし今回変更した対象(URLフラグメントの合成ロジック)はレンダーループに依存しない ── `MapLibreMap` のコンストラクタは `center`/`zoom`/`bearing`/`pitch` を同期的に内部状態へ反映するため、`map.getCenter()`/`getZoom()` 等は描画の成否と無関係に初期化直後から正しい値を返す。この性質を利用し、`window.map`(グローバル公開されたMapインスタンス)ではなく `location.hash` の中身そのものを直接検証することで、レンダーループの制約を回避した(D5の教訓「目視確認より先にコンソールから直接確認する」の具体的な適用例)。
 
 **Consequences**: `src/shorthand.ts`/`src/shorthand.test.ts` を拡張(往復テスト、フォールバック条件ごとの `null` ケースを個別にテスト済み)。`src/render.ts`/`src/main.ts` のコメントを更新し、「ライブ反映は常に `#m=`」という記述を「形が収まる限り `#q=` を維持し、収まらない場合のみ `#m=` にフォールバックする」に改めた。D7 の残りの条件(2〜4、STAFF_PROMPT案内の更新と実際の `#m=` 削除の判断)はまだ着手していない ── 今回の実装により「複数カタログ/`required_styles`・`optional_styles`/`sharing_policy` 明示的上書き」という、より高度なケースだけが `#m=` を必要とする状態になったので、次にSTAFF_PROMPT案内を更新する際はこの3条件を明記すればよい。
+
+## D9: 背景地図(bvmap)の表示/非表示トグル
+
+**Status**: Accepted
+
+**Context**: ユーザーから「市街地では建物がbvmapの上に載った主題画像/レイヤーを隠してしまう場合がある」との指摘があった。3D地形(`mapterhorn`)は既にMapLibre標準の `TerrainControl`(右上の山アイコン)でON/OFFできるが、背景地図(グレースケールのbvmap、`base-style.json` の `before`/`after` に約120層、常にすべての地図で無条件に描画される)自体を隠す手段は無かった。
+
+**Decision**: パネルに「背景地図(bvmap)を表示」チェックボックス(既定ON)を1つ追加するだけで実装した。既存の実装をそのまま流用できた ── `renderMapView`(`src/render.ts`)は既に、構築済みスタイルの `style.layers` を `source` ごとにグルーピングした `layerIdsBySourceId` マップを持ち(元々は主題レイヤー・`required_styles` 由来レイヤーの表示/非表示トグル用)、`[data-layer-toggle]` 属性を持つあらゆるチェックボックスを汎用ハンドラで拾って `map.setLayoutProperty(layerId, 'visibility', ...)` を呼ぶ。`buildStyle`(`style.ts`)が生成する `style.layers` の bvmap 由来レイヤー(約120層、いずれも `source: "bvmap"`)は既にこの仕組みでグルーピング対象になっていたため、`data-layer-toggle="bvmap"` を持つチェックボックスを追加するだけで、新規JSロジックを一切書かずに動作した。レイヤー検索(`#layer-search`)の対象である `.layers` 内の `.layer-item` クラスとは分離し(検索時にこのトグルが紛れて隠れる/表示されるのを避けるため)、`urlShareAdvisory` の直後、主題レイヤー一覧より上に独立した項目として配置した。
+
+**このトグルはURLに永続化しない**: 主題レイヤーの表示/非表示トグル(既存)も同様に、現在の可視状態はMapIntentの`required_layers`/`optional_layers`とは独立したセッション内のみのUI状態であり、リロード/リンク共有では復元されない(`required`かどうかのみが初期可視性を決める)。bvmapトグルもこの既存の挙動に合わせた ── 新たに`#q=`/`#m=`へ可視状態を永続化するフィールドを追加する変更はしていない。トグル操作は`updateFragment()`を呼ぶ(既存の主題レイヤートグルと同じ)が、`buildShorthandFragment`/`buildCurrentIntentYaml`のいずれもレイヤー可視性を読み書きしないため、フラグメントの内容自体には影響しない。
+
+**検証**: 本番相当ビルド(`npm run build && npm run preview`)で実機確認。チェックボックスの表示、クリックによるON/OFF切り替え、コンソールエラー無し(約120層への`setLayoutProperty`呼び出しが例外を投げないこと)、トグル後もURLフラグメントが正しい`#q=`のまま(D8)であることを確認した。
+
+**Consequences**: `src/render.ts` のみ変更(HTMLテンプレートに1ブロック追加)。新規テストは追加していない ── この変更は純粋にDOM生成(`renderMapView`内のテンプレート文字列)であり、既存の `render.test.ts` は副作用のない純粋関数(`buildPopupHtml`等)のみを対象にしているため、同種のテストを書くには`MapLibreMap`のモックが要る(既存コードもその種のテストを持たない)。実機ブラウザ確認で代替した。
