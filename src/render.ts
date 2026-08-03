@@ -30,6 +30,17 @@ interface MapIntentExample {
 // Kumamoto listed first -- the actual Staff-generated intent that motivated
 // this repository (see DECISIONS.md D1): a real disaster-response orthophoto,
 // verified against hfu/layers-martin's catalog the day after the quake.
+//
+// The layers-martin catalog URI below deliberately uses the ".json" suffix,
+// not the extensionless "/catalog" alias -- hfu.github.io serves the same
+// bytes either way, but with content-type: application/octet-stream for the
+// extensionless form vs application/json for ".json" (confirmed via curl).
+// A Staff agent fetching the catalog to verify source_ids before writing a
+// Map Intent is more likely to have that fetch handled as text/JSON, not a
+// binary download, when the URL is unambiguous about its content type.
+// Cartographer's own resolution (catalog.ts, catalogBaseUrl) is unaffected
+// either way -- it strips both forms to the same base URL and never fetches
+// the catalog root itself.
 const EXAMPLES: MapIntentExample[] = [
   {
     id: 'kumamoto-orthophoto',
@@ -45,7 +56,7 @@ catalog_context:
   active_catalogs:
     - id: "layers-martin"
       type: "layers_txt"
-      uri: "https://hfu.github.io/layers-martin/catalog"
+      uri: "https://hfu.github.io/layers-martin/catalog.json"
 required_layers:
   - source_id: "20260729kumamoto_yatsushiro_0729do_sokuho"
     label: "八代地区正射画像（速報、2026/7/29撮影）"
@@ -72,7 +83,7 @@ catalog_context:
   active_catalogs:
     - id: "layers-martin"
       type: "layers_txt"
-      uri: "https://hfu.github.io/layers-martin/catalog"
+      uri: "https://hfu.github.io/layers-martin/catalog.json"
       version: "2026-07-09T00:00:00Z"
 required_layers:
   - source_id: "lcmfc2"
