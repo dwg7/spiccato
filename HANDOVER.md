@@ -48,6 +48,7 @@
 
 - **背景地図(bvmap)の表示/非表示トグル**(D9、2026-08-03実装) — パネルに「背景地図(bvmap)を表示」チェックボックス(既定ON)を追加。既存の`layerIdsBySourceId`/`[data-layer-toggle]`汎用ハンドラ(`src/render.ts`)をそのまま流用でき、新規JSロジックは不要だった(HTMLテンプレートへの1ブロック追加のみ)。可視状態はURLに永続化しない(既存の主題レイヤートグルと同じ挙動)。3D地形は従来通り`TerrainControl`(右上の山アイコン)でON/OFF。
 - **源内スタイル**(D10、2026-08-03実装) — `hfu/layers-martin`に`GENNAI_PROMPT.md`を追加(同リポジトリDECISIONS.md D28)。当初計画していたRubyビルドスクリプトによる自動生成は、`hfu/layers-martin`のD23が既に同種の案(`STANDALONE_PROMPT.md`、全カタログ埋め込み)を保守負荷過大として却下していたことが判明したため見送り、`STAFF_PROMPT.md`の既存文章を抜粋・圧縮する手動保守方式に変更した。3,966字(目標8,000字)、掲載source_id/style_id全14件は実カタログに対して存在確認済み。**spiccatoサイトに埋め込まれた3件のサンプル質問全てで実機検証済み**(熊本地震オルソ画像・石狩川治水・北海道火山土地条件図、`GENNAI_PROMPT.md`の内容のみから構築したリンク/YAMLをspiccato本番相当ビルドで実際に描画確認、欠落レイヤー無し) — 検証中に火山土地条件図のYAML例に`area.bbox`が欠けていた不備(全国表示にフォールバックしてしまう)を発見・修正した。
+- **`GENNAI_PROMPT.md`の発見性を確保**(D11、2026-08-03実装) — 追加直後、`hfu/layers-martin`のREADME.mdにも本サイトのフォーム画面にもリンクが無く、実質発見不能だったことが判明。`scripts/fetch-gennai-prompt.mjs`(`fetch-staff-prompt.mjs`と同一パターン)を新設し、フォーム画面「1. Prompt your AI」に2つ目のdisclosure(「Using an AI with no internet access? (e.g. 源内)」)として表示するようにした。両リポジトリのREADME.mdにも相互参照を追記(`hfu/layers-martin`のREADME.mdは`STAFF_PROMPT.md`自体への言及も無かったため、あわせて解消)。
 - **MCPスタイル stdio・Workers版**(D10、2026-08-03実装) — 上記参照。
 
 ## リポジトリ構成

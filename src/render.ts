@@ -190,12 +190,25 @@ function extractStaffPromptBlock(markdown: string): string {
 // -- which skips this screen entirely.
 export function renderFormView(
   container: HTMLElement,
-  opts: { prefill?: string; error?: string; staffPromptMarkdown: string; onSubmit: (rawIntent: string) => void }
+  opts: {
+    prefill?: string;
+    error?: string;
+    staffPromptMarkdown: string;
+    gennaiPromptMarkdown: string;
+    onSubmit: (rawIntent: string) => void;
+  }
 ): void {
   const value = escapeHtml(opts.prefill ?? EXAMPLES[0].yaml);
   const errorBlock = opts.error ? `<div class="notice error">${escapeHtml(opts.error)}</div>` : '';
   const staffPromptRaw = extractStaffPromptBlock(opts.staffPromptMarkdown);
   const staffPrompt = escapeHtml(staffPromptRaw);
+  // GENNAI_PROMPT.md (hfu/layers-martin D10/D28) has no ````text```` fence to
+  // extract -- the whole file *is* the prompt, unlike STAFF_PROMPT.md's
+  // meta-commentary-plus-fenced-block structure. extractStaffPromptBlock
+  // already falls back to the trimmed whole markdown when no fence matches,
+  // so it's reused as-is here rather than writing a second function.
+  const gennaiPromptRaw = extractStaffPromptBlock(opts.gennaiPromptMarkdown);
+  const gennaiPrompt = escapeHtml(gennaiPromptRaw);
 
   container.innerHTML = `
 <div class="form-view">
@@ -224,6 +237,21 @@ export function renderFormView(
           <pre>${staffPrompt}</pre>
         </div>
       </details>
+      <details class="dads-disclosure" style="margin-top:.5rem;">
+        <summary class="dads-disclosure__summary">
+          <svg class="dads-disclosure__icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="11" fill="currentcolor"/>
+            <circle class="dads-disclosure__icon-circle" cx="12" cy="12" r="8" fill="currentcolor"/>
+            <path class="dads-disclosure__icon-triangle" d="M17 10H7L12 15L17 10Z" fill="Canvas"/>
+          </svg>
+          Using an AI with no internet access? (e.g. 源内)
+        </summary>
+        <div class="dads-disclosure__content">
+          <p style="font-size:0.82rem;color:#555;">If your AI can save a system prompt but can't fetch the catalog itself, use this shorter, self-contained variant instead. Prompt source: <a href="https://github.com/hfu/layers-martin/blob/main/GENNAI_PROMPT.md" target="_blank" rel="noreferrer">hfu/layers-martin GENNAI_PROMPT.md</a></p>
+          <p><button id="copy-gennai-prompt" type="button" class="dads-button" data-type="outline" data-size="sm">Copy</button></p>
+          <pre>${gennaiPrompt}</pre>
+        </div>
+      </details>
     </div>
     <div class="card">
       <h2 class="card-step">2. Ask your AI</h2>
@@ -250,6 +278,9 @@ export function renderFormView(
 
   const copyPromptButton = container.querySelector<HTMLButtonElement>('#copy-staff-prompt')!;
   copyPromptButton.addEventListener('click', () => copyToClipboard(copyPromptButton, staffPromptRaw));
+
+  const copyGennaiPromptButton = container.querySelector<HTMLButtonElement>('#copy-gennai-prompt')!;
+  copyGennaiPromptButton.addEventListener('click', () => copyToClipboard(copyGennaiPromptButton, gennaiPromptRaw));
 
   const form = container.querySelector<HTMLFormElement>('#intent-form')!;
   const textarea = form.querySelector<HTMLTextAreaElement>('textarea[name=map_intent]')!;

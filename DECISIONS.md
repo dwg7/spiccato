@@ -16,6 +16,7 @@
 | [D8](#d8-q-へのrender_hintscartographer_feedback拡張とライブ反映のq優先化d7条件1の実装) | `#q=` への render_hints/cartographer_feedback 拡張とライブ反映の `#q=` 優先化(D7条件1の実装) | Accepted | 2026-08-03 |
 | [D9](#d9-背景地図bvmapの表示非表示トグル) | 背景地図(bvmap)の表示/非表示トグル | Accepted | 2026-08-03 |
 | [D10](#d10-staffの複数スタイル源内mcpオープンウェブと-mcpスタイルstdioworkers版の実装) | Staffの複数スタイル(源内・MCP・オープンウェブ)と、MCPスタイル(stdio・Workers版)の実装 | Accepted(MCP部分)/Proposed(源内・オープンウェブ) | 2026-08-03 |
+| [D11](#d11-gennai_promptmdをフォーム画面から発見できるようにする) | `GENNAI_PROMPT.md` をフォーム画面から発見できるようにする | Accepted | 2026-08-03 |
 
 ---
 
@@ -225,3 +226,20 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 **実機検証**: stdio版は`tsup`でビルドし、`StdioServerTransport`に対して生のJSON-RPCメッセージ(`initialize`→`tools/list`→`tools/call`)を子プロセス越しに送受信するテストスクリプトで、`search_catalog("地形分類")`→`build_spiccato_link`という一連の流れが実際のネットワーク越しに動作し、正しい`#q=`リンクを返すことを確認した。Workers版は`wrangler dev`でローカル起動し、同じ流れを`curl`でのHTTP POSTで再現、さらに複数カタログ(`required_styles`使用)で`#m=`フォールバックが正しく`deflate-raw`圧縮込みで動作することも確認した(Cloudflare Workersの`CompressionStream`が`'deflate-raw'`フォーマットに対応していることも合わせて確認できた)。どちらの経路で生成したリンクも、本番相当ビルド(`npm run preview`)で実際に開いて欠落レイヤー無し・コンソールエラー無しで描画されることを確認済み。
 
 **Consequences**: `mcp/`・`worker/`をリポジトリに追加(それぞれ独立した`package.json`、Viteのビルド対象外)。`mcp/test/`にVitestテスト13件(`catalog.test.ts`・`linkBuilder.test.ts`、`fetch`をモック化)を追加。`src/shorthand.ts`の関数分割はリファクタリングであり、既存の`buildShorthandFragment`の外部動作(D8で確立した契約)は変更していない ── `src/shorthand.test.ts`に`buildShorthandLink`向けのテストを追加し、既存テストは全てそのまま通過することを確認した。源内スタイル・オープンウェブスタイルは計画段階のまま(別セッションで着手、`/Users/hfu/.claude/plans/scalable-snacking-spring.md`参照)。
+
+## D11: `GENNAI_PROMPT.md` をフォーム画面から発見できるようにする
+
+**Status**: Accepted
+
+**Context**: `hfu/layers-martin`に`GENNAI_PROMPT.md`(D10、同リポジトリD28)を追加した後、ユーザーから「源内用のプロンプトはどこから手に入れるのか、README.mdには記載しているか」との指摘があった。確認したところ、`GENNAI_PROMPT.md`はどこからもリンクされていなかった: `hfu/layers-martin`のREADME.mdは`STAFF_PROMPT.md`の存在すら言及しておらず(この時点で既存の欠落)、spiccato自身のフォーム画面(「1. Prompt your AI」)は`STAFF_PROMPT.md`だけをビルド時に`scripts/fetch-staff-prompt.mjs`で取得して表示する構造になっており、`GENNAI_PROMPT.md`を取り込む経路が存在しなかった。実質的に、直接GitHubのファイル一覧を見るか、DECISIONS.md/HANDOVER.mdのような開発者向け文書を読むしか発見手段が無い状態だった。
+
+**Decision**: 既存の`STAFF_PROMPT.md`取得の仕組みをそのまま複製する形で解決した。
+
+- `scripts/fetch-gennai-prompt.mjs`を新設(`fetch-staff-prompt.mjs`と同一パターン、`hfu/layers-martin`の`GENNAI_PROMPT.md`をビルド時にfetchし`src/gennai-prompt.txt`へ保存、失敗時は既存スナップショットを保持)。`package.json`の`prebuild`で両方を実行する。
+- `src/main.ts`で`gennai-prompt.txt?raw`をimportし、`renderFormView`に`gennaiPromptMarkdown`として渡す。
+- `src/render.ts`の「1. Prompt your AI」カード内、既存の`STAFF_PROMPT.md`用`<details>`disclosureの直後に、2つ目の`<details>`("Using an AI with no internet access? (e.g. 源内)")を追加。専用のCopyボタン(`#copy-gennai-prompt`)を持つ。`extractStaffPromptBlock`関数は`` ````text ```` ``フェンスが無い入力に対して全文をtrimして返すフォールバックを既に持っていたため、`GENNAI_PROMPT.md`(フェンス無し、ファイル全体がそのままプロンプト)にもそのまま再利用できた ── 新しい抽出関数は書いていない。
+- `hfu/layers-martin`のREADME.mdにも「Staffプロンプト」節を新設し、`STAFF_PROMPT.md`・`GENNAI_PROMPT.md`の両方と、spiccatoのフォーム画面へのリンクを追記した(README.mdがそもそも`STAFF_PROMPT.md`を言及していなかった欠落もあわせて解消)。spiccato自身のREADME.mdにも同様の相互参照を追記した。
+
+**検証**: 本番相当ビルド(`npm run build && npm run preview`)で実機確認。2つ目のdisclosureが正しく表示され、開くと`GENNAI_PROMPT.md`の全文(3,965字、`.trim()`後)が表示されることを確認。Copyボタンの配線も既存の`#copy-staff-prompt`ボタンと同一の`copyToClipboard`関数を呼ぶことを確認した(自動化ブラウザ環境ではクリップボード権限が無く両ボタンとも"Copy failed"になるが、これは環境側の制約であり、既存ボタンも同じ挙動を示すことで新規コードに起因する問題ではないことを確認済み)。
+
+**Consequences**: `scripts/fetch-gennai-prompt.mjs`・`src/gennai-prompt.txt`(fetchしたスナップショット、`src/staff-prompt.txt`と同様にリポジトリにコミットする運用を踏襲)を追加。`src/render.ts`の`renderFormView`のシグネチャに`gennaiPromptMarkdown`が必須で追加されたため、呼び出し元(`src/main.ts`)も更新した(呼び出し箇所は1つのみ)。

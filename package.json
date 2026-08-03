@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/fetch-staff-prompt.mjs",
+    "prebuild": "node scripts/fetch-staff-prompt.mjs && node scripts/fetch-gennai-prompt.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",

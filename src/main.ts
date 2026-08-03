@@ -9,12 +9,17 @@ import type { MapIntent } from './types.ts';
 // Fetched at build time (scripts/fetch-staff-prompt.mjs), bundled as a plain
 // string. Ported from hfu/faceless-cartographer D19; see DECISIONS.md D1.
 import staffPromptMarkdown from './staff-prompt.txt?raw';
+// Fetched at build time (scripts/fetch-gennai-prompt.mjs) from the same
+// hfu/layers-martin repo -- the tight, offline-only Staff prompt variant
+// (D10/D28) for AI that can save a system prompt but has no internet
+// access.
+import gennaiPromptMarkdown from './gennai-prompt.txt?raw';
 
 const app = document.getElementById('app');
 if (!app) throw new Error('#app root element not found');
 
 function showForm(opts: { prefill?: string; error?: string } = {}) {
-  renderFormView(app!, { ...opts, staffPromptMarkdown, onSubmit: handleSubmit });
+  renderFormView(app!, { ...opts, staffPromptMarkdown, gennaiPromptMarkdown, onSubmit: handleSubmit });
 }
 
 // Shared by the full-YAML path (handleSubmit) and the shorthand path
