@@ -19,7 +19,7 @@
 
 **Status**: Accepted
 
-**Context**: このリポジトリは、`hfu/faceless-cartographer`(staccato アーキテクチャにおける Cartographer の第二世代実装)と同じ著者による、同じ `UNopenGIS/staccato-spec` を対象とした第三世代実装である。命名の由来: `spiccato`(スピッカート)は弦楽器の跳ね弓奏法で、`staccato`(音を切り離す)と同じ系統だが、弓を弦から跳ね上げることでより極端に音を分離させる。今回の変更は「アーキテクチャ(4者モデル、Cartographerの決定的描画)は変えず、原則(URLに状態を持たせない、という制約)をより大胆に押し進める・あるいは転換する」という位置づけであり、staccatoと対立する概念(legato等)ではなく、staccatoの先鋭化として選んだ。
+**Context**: このリポジトリは、`hfu/faceless-cartographer`(staccato アーキテクチャにおける Cartographer の第二世代実装)と同じ著者による、同じ `UNopenGIS/staccato-spec` を対象とした第三世代実装である。命名の由来: `spiccato`(スピッカート)は弦楽器の跳ね弓奏法で、`staccato`(音を切り離す)と同じ系統だが、弓を弦から跳ね上げることでより極端に音を分離させる。今回の変更は「アーキテクチャ(4者モデル、Cartographerの決定的描画)は変えず、原則(URLに状態を持たせない、という制約)は必要に応じて転換し、災害対応時のニーズ対応を含めた、よりユースケースに即した活用ができるように大胆に推し進める。」という位置づけであり、staccatoと対立する概念(legato等)ではなく、staccatoの先鋭化として選んだ。「URLに状態を持たせない」という制約自体を推し進めるのではなく、逆方向(URLに状態を持たせる)へ明確に転換した点が `hfu/faceless-cartographer` との最大の違いである(D2参照)。
 
 当初の発端は、Claude が Staff として生成した Map Intent(令和8年熊本地震・八代地区正射画像速報)を `hfu/faceless-cartographer` に手で貼り付けて動作確認したことだった。そこから「Claude が Map Intent を生成した時点で、貼り付け不要のURLを直接構築して提示できないか」という発想が生まれた。
 
@@ -103,9 +103,13 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 
 再調査の結果、実際の原因は次の通りだった: `maplibre-gl` 6.x はベクトルタイル(bvmap)の解析とraster-dem(Mapterhorn地形)のデコードを Web Worker に委譲しており、そのワーカースクリプト(`maplibre-gl-worker.mjs`)はページと同じオリジンの相対URLから実行時に読み込まれる。`vite-plugin-singlefile` はメインの JS/CSS を `index.html` にインライン化するが、この動的に構築されるWorker URLはインライン化の対象にならない。一方 `docs/` には `index.html` と `.nojekyll` しか含まれておらず、`https://dwg7.github.io/spiccato/maplibre-gl-worker.mjs` は存在しない(404)ままデプロイされていた。ラスター画像ソース(熊本のオルソ画像、津波のPNGタイル等)はWorkerを必要とせず正常に描画されていたため、レイヤー種別ごとの問題に見えてしまっていた。
 
-**Decision**: `node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs`(および対応する `.map`)を `public/` にコピーする。Viteの `publicDir` コピー処理により、`docs/` にも同じファイル名でそのまま配置され、ブラウザが要求していたのと同じURLパスで実際に配信されるようになる。
+**この診断は途中まで正しく、途中から不十分だった**: `maplibre-gl-worker.mjs` を `public/` に配置してデプロイした後も、ユーザーの実ブラウザで背景・地形が依然として表示されないという再報告があった。ブラウザの開発者コンソールで「標高タイル(Mapterhorn)への呼び出しは発生しているが、ベクトルタイル(bvmap)への呼び出しは確認できない」という具体的な観察をユーザーから得たことが決め手になった。MapLibreコミュニティの情報(GitHub Issue・Vite関連の既知の問題)を調査した結果、`maplibre-gl-worker.mjs` 自身が同階層の `maplibre-gl-shared.mjs`(メインバンドルとワーカーで共有されるコード、約470KB)を `import` しており、これも同様に `docs/` に存在しなければワーカーの初期化そのものが失敗することが判明した(Viteでこの種のワーカーを扱う際の既知の落とし穴: `?url` で素朴に扱うと本体は読み込めても兄弟chunkが欠落する)。raster-dem(地形)のタイル本体はメインスレッドで直接fetchされデコードのみワーカーに委譲する経路を持つため一部動作しているように見えたが、ベクトルタイル(bvmap)は取得からワーカーに依存するため、ワーカー初期化の失敗の影響をより強く受けていたと考えられる。
 
-**Consequences**: `public/maplibre-gl-worker.mjs`・`public/maplibre-gl-worker.mjs.map` を追加(node_modules由来のバイナリ、`.gitignore` の対象外)。将来 `maplibre-gl` をアップデートした際は、このファイルも `node_modules/maplibre-gl/dist/` から再コピーする必要がある(自動追随しない、手動更新が必要な vendoring)。この種の「ビルドツールが検出できないURLで参照される補助ファイル」は今後も起こり得るため、依存パッケージの大きなバージョンアップ後は実際にデプロイ済みサイトをネットワークタブ等で確認する習慣が要る。副産物として `map.on('error', ...)` のログ出力を追加し、今後同種の問題の切り分けを容易にした。
+**Decision**: `node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs` と `maplibre-gl-shared.mjs`(それぞれの `.map` を含む、計4ファイル)を `public/` にコピーする。Viteの `publicDir` コピー処理により、`docs/` にも同じファイル名でそのまま配置され、ワーカーの相対importが実行時に解決できるようになる。
+
+**検証方法についての教訓**: 当初、スクリーンショットによる目視確認を繰り返していたが、このセッションで使っていた自動化ブラウザツールには「タブが `document.hidden: true` として扱われ `requestAnimationFrame` がほぼ発火しない」という別の制約があり(D5前半の誤診断の原因)、目視確認だけでは「まだ直っていない」のか「ツールの制約で見えないだけ」なのかを切り分けられなかった。最終的に有効だったのは、`map.isSourceLoaded('bvmap')`/`isSourceLoaded('mapterhorn')` をコンソールから直接呼び出す方法で、これはレンダーループの制約を受けにくく、修正の成否をブール値で即座に確認できた。今後この種の問題を調査する際は、目視確認よりも先にこの方法を使うべきだった(スクリーンショットの反復はコストが高い)。
+
+**Consequences**: `public/maplibre-gl-worker.mjs`・`public/maplibre-gl-worker.mjs.map`・`public/maplibre-gl-shared.mjs`・`public/maplibre-gl-shared.mjs.map` を追加(node_modules由来のバイナリ、`.gitignore` の対象外、合計約580KB)。将来 `maplibre-gl` をアップデートした際は、この4ファイルすべてを `node_modules/maplibre-gl/dist/` から再コピーする必要がある(自動追随しない、手動更新が必要な vendoring)。この種の「ビルドツールが検出できないURLで参照される補助ファイル」は今後も起こり得るため、依存パッケージの大きなバージョンアップ後は実際にデプロイ済みサイトを確認する習慣が要る。副産物として `map.on('error', ...)` のログ出力を追加した(ただしワーカーのimport失敗はこのハンドラでは捕捉されない、Workerコンテキストのエラーであるため)。
 
 ## D6: コード実行環境の無いGenAI向けに `#q=` 簡易フォーマットを追加する
 
