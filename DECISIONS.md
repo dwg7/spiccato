@@ -16,7 +16,8 @@
 | [D8](#d8-q-へのrender_hintscartographer_feedback拡張とライブ反映のq優先化d7条件1の実装) | `#q=` への render_hints/cartographer_feedback 拡張とライブ反映の `#q=` 優先化(D7条件1の実装) | Accepted | 2026-08-03 |
 | [D9](#d9-背景地図bvmapの表示非表示トグル) | 背景地図(bvmap)の表示/非表示トグル | Accepted | 2026-08-03 |
 | [D10](#d10-staffの複数スタイル源内mcpオープンウェブと-mcpスタイルstdioworkers版の実装) | Staffの複数スタイル(源内・MCP・オープンウェブ)と、MCPスタイル(stdio・Workers版)の実装 | Accepted(MCP部分)/Proposed(源内・オープンウェブ) | 2026-08-03 |
-| [D11](#d11-gennai_promptmdをフォーム画面から発見できるようにする) | `GENNAI_PROMPT.md` をフォーム画面から発見できるようにする | Accepted | 2026-08-03 |
+| [D11](#d11-gennai_promptmdをフォーム画面から発見できるようにする) | `GENNAI_PROMPT.md` をフォーム画面から発見できるようにする | Accepted(取得元はD12で変更) | 2026-08-03 |
+| [D12](#d12-gennai_promptmdをこのリポジトリへ移設し全カタログ埋め込み版に作り直す) | `GENNAI_PROMPT.md` をこのリポジトリへ移設し、全カタログ埋め込み版に作り直す | Accepted | 2026-08-03 |
 
 ---
 
@@ -229,7 +230,7 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 
 ## D11: `GENNAI_PROMPT.md` をフォーム画面から発見できるようにする
 
-**Status**: Accepted
+**Status**: Accepted(UI配線の判断は有効。取得元は同日中にD12で変更 — `hfu/layers-martin`からのfetchではなく、このリポジトリ自身がカタログから直接生成する方式になった。`scripts/fetch-gennai-prompt.mjs`は`scripts/build-gennai-prompt.mjs`に置き換えられ、`GENNAI_PROMPT.md`は`src/gennai-prompt.txt`経由ではなくリポジトリルートから直接importする形に変わったが、disclosure UI・Copyボタン・`extractStaffPromptBlock`再利用という設計自体はそのまま踏襲されている)
 
 **Context**: `hfu/layers-martin`に`GENNAI_PROMPT.md`(D10、同リポジトリD28)を追加した後、ユーザーから「源内用のプロンプトはどこから手に入れるのか、README.mdには記載しているか」との指摘があった。確認したところ、`GENNAI_PROMPT.md`はどこからもリンクされていなかった: `hfu/layers-martin`のREADME.mdは`STAFF_PROMPT.md`の存在すら言及しておらず(この時点で既存の欠落)、spiccato自身のフォーム画面(「1. Prompt your AI」)は`STAFF_PROMPT.md`だけをビルド時に`scripts/fetch-staff-prompt.mjs`で取得して表示する構造になっており、`GENNAI_PROMPT.md`を取り込む経路が存在しなかった。実質的に、直接GitHubのファイル一覧を見るか、DECISIONS.md/HANDOVER.mdのような開発者向け文書を読むしか発見手段が無い状態だった。
 
@@ -243,3 +244,31 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 **検証**: 本番相当ビルド(`npm run build && npm run preview`)で実機確認。2つ目のdisclosureが正しく表示され、開くと`GENNAI_PROMPT.md`の全文(3,965字、`.trim()`後)が表示されることを確認。Copyボタンの配線も既存の`#copy-staff-prompt`ボタンと同一の`copyToClipboard`関数を呼ぶことを確認した(自動化ブラウザ環境ではクリップボード権限が無く両ボタンとも"Copy failed"になるが、これは環境側の制約であり、既存ボタンも同じ挙動を示すことで新規コードに起因する問題ではないことを確認済み)。
 
 **Consequences**: `scripts/fetch-gennai-prompt.mjs`・`src/gennai-prompt.txt`(fetchしたスナップショット、`src/staff-prompt.txt`と同様にリポジトリにコミットする運用を踏襲)を追加。`src/render.ts`の`renderFormView`のシグネチャに`gennaiPromptMarkdown`が必須で追加されたため、呼び出し元(`src/main.ts`)も更新した(呼び出し箇所は1つのみ)。
+
+## D12: `GENNAI_PROMPT.md` をこのリポジトリへ移設し、全カタログ埋め込み版に作り直す
+
+**Status**: Accepted
+
+**Context**: D10・D11の時点で`GENNAI_PROMPT.md`は`hfu/layers-martin`側に置かれ(同リポジトリDECISIONS.md D28)、`STAFF_PROMPT.md`の既存文章を抜粋・圧縮した約4,000字の精選版だった(D23の「保守負荷とのバランス」判断を踏襲、頻出カテゴリのみ埋め込み)。この直後、ユーザーから2つの明確な方針転換があった:
+
+1. **今回は`hfu/layers-martin`のD23判断を踏み越え、カタログを(既知のノイズ系統を除き)全件埋め込むべきである。** D23が懸念した保守負荷(手書きでは維持できない)は、生成を完全自動化する(手で編集しない、ビルドのたびに実カタログから再生成する)ことで解消できると判断した。
+2. **`GENNAI_PROMPT.md`は`hfu/layers-martin`ではなく、このリポジトリ(`dwg7/spiccato`)に置くべきである。** 内容の大部分(`#q=`リンク構築規則)がspiccato固有のインタフェースに依存しており、特定のCartographer実装に依存しないLibraryであるべき`hfu/layers-martin`の立場([D21](https://github.com/hfu/layers-martin/blob/main/DECISIONS.md#d21) 参照、同種の判断)にそぐわなかった。
+
+**Decision**:
+
+- `hfu/layers-martin`から`GENNAI_PROMPT.md`を削除し、同リポジトリのD28を「Superseded」に変更した(移設の記録として、元の決定内容はそのまま残した)。
+- このリポジトリに`scripts/build-gennai-prompt.mjs`を新設。`scripts/fetch-gennai-prompt.mjs`(D11、他リポジトリのファイルをそのまま取得するだけだった)を置き換える。新スクリプトは:
+  - `layers-martin/catalog.json`・`stars.optgeo.org/catalog`を直接fetchし、`tiles`(source_id)・`styles`(style_id)を取得する。
+  - **既知のノイズ系統を除外**する: `disasterhist_*`(地域別・年代別に細分化された災害履歴図シリーズ)、`*_liq`の4件(過去の液状化イラスト)、および今回の監査で新たに見つかった`\d{4}_\d{2}[-_]`パターンの60件(例: `1896_09_m29`=「明治29年9月降雨」、`1938_07_s13`=「阪神大水害」)── いずれも`STAFF_PROMPT.md`の「意味解決の指針」が警告する「過去の災害イラストが現在のリスクマップと混同されうる」問題に該当する。3つ目のパターンは`STAFF_PROMPT.md`に名指しで書かれていなかったため、除外前にユーザーに確認した。他の大きな系統(`gsjgeomap`地質図幅866件、`ndvi`月次植生指数105件、`vlcd`火山別データ37件等)は地理的・時間的に分割されているだけの正当な現行データであり、除外していない。
+  - 残った全件(layers-martin 1,682件・stars-optgeo 7件)を`id|name`形式でそのまま埋め込む(pathは`catalog.json`自体に含まれないため埋め込めない — 候補が複数ある場合は`name`の語感で判断する旨をプロンプト内に明記した)。
+  - `#q=`リンク構築規則・背景地図自動描画の注意・`required_styles`のYAML例など、カタログ以外の「プロセス」部分は引き続き手書きの定数として同スクリプト内に保持する(データ部分だけを自動生成し、指示文は人間が管理するという分担)。
+  - 生成結果を`GENNAI_PROMPT.md`(リポジトリルート、`src/`ではない — `DECISIONS.md`/`HANDOVER.md`と同格の実体あるドキュメントという位置づけ)に書き込む。取得失敗時は既存スナップショットを保持する(`fetch-staff-prompt.mjs`と同じフォールバック方針)。
+- `package.json`の`prebuild`を`fetch-gennai-prompt.mjs`から`build-gennai-prompt.mjs`に差し替え。
+- `src/main.ts`のimportを`./gennai-prompt.txt?raw`から`../GENNAI_PROMPT.md?raw`(リポジトリルート直接import)に変更、`src/gennai-prompt.txt`は削除。
+- `src/render.ts`の「Prompt source」リンクを`dwg7/spiccato`自身へ向け直した。disclosure UI・Copyボタン・`extractStaffPromptBlock`の再利用(D11で確立)自体は変更していない。
+
+**規模**: 66,860字(layers-martin 1,682件 + stars-optgeo 7件)。D28時点の約4,000字から大幅に拡大した。この規模が実際の源内の上限に収まるかは未検証(ユーザーが別途確認予定)。
+
+**検証**: 本番相当ビルド(`npm run build && npm run preview`)で実機確認。disclosureを開くと生成された全文(66,859字、`.trim()`後)が表示され、`20260729kumamoto_yatsushiro_0729do_sokuho`・`lcmfc2`等の実在idが含まれること、`disasterhist_*`・`\d{4}_\d{2}[-_]`パターンの実データ行が1件も含まれないこと(プロンプト説明文中の`disasterhist_*`という文字列自体はヒットするが、実データ行としては0件)を確認した。コンソールエラー無し。
+
+**Consequences**: `hfu/layers-martin`はカタログ生成(`build_catalog.rb`)に専念する形に戻った(同リポジトリREADME.md/DECISIONS.md/HANDOVER.mdを更新済み)。このリポジトリの`prebuild`は毎回2つの外部カタログ(layers-martin・stars-optgeo)をfetchするようになり、ビルド時間・ネットワーク依存が増えた(既存の`STAFF_PROMPT.md`fetchと同種の依存が1つ増えただけで、新しいカテゴリのリスクではない)。`docs/index.html`のサイズが約94KB増加した(1,320KB→1,414KB、圧縮テキストの埋め込み分)。ノイズ除外パターンが将来また見つかった場合は、`scripts/build-gennai-prompt.mjs`の`NOISE_ID_PREFIXES`/`NOISE_ID_PATTERN`/`NOISE_IDS`に追記する運用とする。

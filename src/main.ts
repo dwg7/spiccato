@@ -9,11 +9,12 @@ import type { MapIntent } from './types.ts';
 // Fetched at build time (scripts/fetch-staff-prompt.mjs), bundled as a plain
 // string. Ported from hfu/faceless-cartographer D19; see DECISIONS.md D1.
 import staffPromptMarkdown from './staff-prompt.txt?raw';
-// Fetched at build time (scripts/fetch-gennai-prompt.mjs) from the same
-// hfu/layers-martin repo -- the tight, offline-only Staff prompt variant
-// (D10/D28) for AI that can save a system prompt but has no internet
-// access.
-import gennaiPromptMarkdown from './gennai-prompt.txt?raw';
+// Generated at build time (scripts/build-gennai-prompt.mjs) from the live
+// hfu/layers-martin + stars-optgeo catalogs -- the standalone, offline-only
+// Staff prompt variant (D10/D12) for AI that can save a system prompt but
+// has no internet access. Lives at the repo root (not src/) since it's a
+// real, reviewable document in its own right, same tier as DECISIONS.md.
+import gennaiPromptMarkdown from '../GENNAI_PROMPT.md?raw';
 
 const app = document.getElementById('app');
 if (!app) throw new Error('#app root element not found');

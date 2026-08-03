@@ -10,7 +10,7 @@
 
 ## 現在の状態(2026-08-03時点、MCPスタイル(stdio・Workers版)実装後)
 
-**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。**実装順序はstdio → Workers → 源内 → (完成後に)オープンウェブの分解を深める**、と明確化済み。MCPスタイル(stdio・Workers、D10)・源内スタイル(`hfu/layers-martin`のD28)は実装完了。次はオープンウェブスタイルの分解の深掘り。
+**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。**実装順序はstdio → Workers → 源内 → (完成後に)オープンウェブの分解を深める**、と明確化済み。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D12、**このリポジトリ自身に置く形に確定**)は実装完了。次はオープンウェブスタイルの分解の深掘り。
 
 ### 実装済み・動作確認済み
 
@@ -47,8 +47,12 @@
 ### 完了(参考)
 
 - **背景地図(bvmap)の表示/非表示トグル**(D9、2026-08-03実装) — パネルに「背景地図(bvmap)を表示」チェックボックス(既定ON)を追加。既存の`layerIdsBySourceId`/`[data-layer-toggle]`汎用ハンドラ(`src/render.ts`)をそのまま流用でき、新規JSロジックは不要だった(HTMLテンプレートへの1ブロック追加のみ)。可視状態はURLに永続化しない(既存の主題レイヤートグルと同じ挙動)。3D地形は従来通り`TerrainControl`(右上の山アイコン)でON/OFF。
-- **源内スタイル**(D10、2026-08-03実装) — `hfu/layers-martin`に`GENNAI_PROMPT.md`を追加(同リポジトリDECISIONS.md D28)。当初計画していたRubyビルドスクリプトによる自動生成は、`hfu/layers-martin`のD23が既に同種の案(`STANDALONE_PROMPT.md`、全カタログ埋め込み)を保守負荷過大として却下していたことが判明したため見送り、`STAFF_PROMPT.md`の既存文章を抜粋・圧縮する手動保守方式に変更した。3,966字(目標8,000字)、掲載source_id/style_id全14件は実カタログに対して存在確認済み。**spiccatoサイトに埋め込まれた3件のサンプル質問全てで実機検証済み**(熊本地震オルソ画像・石狩川治水・北海道火山土地条件図、`GENNAI_PROMPT.md`の内容のみから構築したリンク/YAMLをspiccato本番相当ビルドで実際に描画確認、欠落レイヤー無し) — 検証中に火山土地条件図のYAML例に`area.bbox`が欠けていた不備(全国表示にフォールバックしてしまう)を発見・修正した。
-- **`GENNAI_PROMPT.md`の発見性を確保**(D11、2026-08-03実装) — 追加直後、`hfu/layers-martin`のREADME.mdにも本サイトのフォーム画面にもリンクが無く、実質発見不能だったことが判明。`scripts/fetch-gennai-prompt.mjs`(`fetch-staff-prompt.mjs`と同一パターン)を新設し、フォーム画面「1. Prompt your AI」に2つ目のdisclosure(「Using an AI with no internet access? (e.g. 源内)」)として表示するようにした。両リポジトリのREADME.mdにも相互参照を追記(`hfu/layers-martin`のREADME.mdは`STAFF_PROMPT.md`自体への言及も無かったため、あわせて解消)。
+- **源内スタイル**(D10〜D12、2026-08-03実装、最終形はD12) — `GENNAI_PROMPT.md`は紆余曲折を経て以下の形に確定した:
+  1. 最初`hfu/layers-martin`に、`STAFF_PROMPT.md`を抜粋・圧縮した精選版(3,966字)として置いた(D10、同リポジトリD28)。
+  2. フォーム画面から発見できなかったため`scripts/fetch-gennai-prompt.mjs`でUIに配線した(D11)。
+  3. ユーザー判断により方針転換: (a)`hfu/layers-martin`のD23判断(全カタログ埋め込みは保守負荷過大)を今回は踏み越え、カタログを既知のノイズ系統を除き全件埋め込むべき、(b)内容がspiccato固有のインタフェースに依存するため、`hfu/layers-martin`ではなくこのリポジトリに置くべき、との指摘を受け、D12で全面作り直し。`hfu/layers-martin`側のD28はSupersededにした。
+  - **現状**(D12): `scripts/build-gennai-prompt.mjs`(新設、`fetch-gennai-prompt.mjs`を置き換え)が`prebuild`のたびにlayers-martin・stars-optgeoの実カタログをfetchし、既知のノイズ系統(`disasterhist_*`、液状化イラスト4件、`\d{4}_\d{2}[-_]`パターンの過去災害イラスト60件 — 3つ目は監査中に新規発見、ユーザー確認済み)を除いた全件(layers-martin 1,682件+stars-optgeo 7件、計66,860字)を`GENNAI_PROMPT.md`(リポジトリルート)に埋め込む。`src/main.ts`は`../GENNAI_PROMPT.md?raw`を直接import。フォーム画面のdisclosure UI自体はD11のまま。
+  - spiccatoサイトに埋め込まれた3件のサンプル質問(熊本地震オルソ画像・石狩川治水・北海道火山土地条件図)で実機検証済み(D11時点、内容は変わってもリンク構築ロジックは同じなので引き続き妥当)。
 - **MCPスタイル stdio・Workers版**(D10、2026-08-03実装) — 上記参照。
 
 ## リポジトリ構成
@@ -108,7 +112,7 @@ npm run preview -- --port 4321 --strictPort   # ローカル確認用
 2. `#m=`の非推奨化計画(D7)の続き — 急ぎではない
 3. `hfu/layers-martin`のSTAFF_PROMPT.md更新提案、`hfu/faceless-cartographer`のDECISIONS.mdクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)。D8・D10を踏まえた更新が必要(MCPスタイルの案内追加も)
 
-bvmap背景地図の表示/非表示トグル(D9)、MCPスタイルstdio・Workers版(D10)、源内スタイル(`hfu/layers-martin`のD28)は実装済み。
+bvmap背景地図の表示/非表示トグル(D9)、MCPスタイルstdio・Workers版(D10)、源内スタイル(`GENNAI_PROMPT.md`、このリポジトリ自身に置く全カタログ埋め込み版、D12)は実装済み。
 
 作業前に必ず `npm run build && npm run preview -- --port 4321 --strictPort` でローカルの本番相当ビルドを確認すること。ブラウザでの目視確認より先に、コンソールから `map.isSourceLoaded('<source-id>')` を直接呼ぶ方法を使うこと(HANDOVER.mdの教訓参照)。`mcp/`・`worker/`はそれぞれ独立した`npm install`が必要(ルートの`npm install`ではインストールされない)。
 
