@@ -386,6 +386,11 @@ export function renderMapView(
   if (view.bounds) {
     map.fitBounds(view.bounds, { padding: 40, duration: 0 });
   }
+  // No error surface existed for map-level failures (bad tiles, style
+  // issues) before this -- worth keeping even though it was added while
+  // diagnosing a background-tab rendering artifact in an automated browser
+  // tool, not a real bug (see DECISIONS.md).
+  map.on('error', (e) => console.error('MapLibre error:', e.error?.message ?? e));
   map.addControl(new NavigationControl());
   map.addControl(new AttributionControl({ compact: true }), 'bottom-right');
   map.addControl(new TerrainControl({ source: 'mapterhorn', exaggeration: 1 }), 'top-right');
