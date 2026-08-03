@@ -26,25 +26,54 @@ const LAYERS_MARTIN_CATALOG_URL = 'https://hfu.github.io/layers-martin/catalog.j
 const STARS_OPTGEO_CATALOG_URL = 'https://stars.optgeo.org/catalog';
 const TARGET = fileURLToPath(new URL('../GENNAI_PROMPT.md', import.meta.url));
 
-// Known-noise id series. `disasterhist_*` and the four `*_liq` ids are
-// documented by name in hfu/layers-martin's STAFF_PROMPT.md "意味解決の
-// 指針" section: region/year-segmented historical-disaster and past-
-// liquidfaction educational illustrations that flood keyword search
-// results and could be mistaken for current-risk layers. While auditing
-// this generator's output (2026-08-03), a third series matching the same
-// pattern -- bare-year ids like `1896_09_m29`/`1938_07_s13` whose names
-// are historical rainfall/typhoon events (明治29年9月降雨, 阪神大水害,
-// カスリーン台風, ...) -- was found not to be covered by either of the
-// above and added here for the same reason (confirmed with the user
-// before adding, since STAFF_PROMPT.md doesn't name this pattern
-// explicitly). Excluding all three here means Staff never sees them at
-// all, rather than needing to be told not to pick them.
-const NOISE_ID_PREFIXES = ['disasterhist_'];
+// Known-noise id series.
+//
+// `disasterhist_*` and the four `*_liq` ids are documented by name in
+// hfu/layers-martin's STAFF_PROMPT.md "意味解決の指針" section: region/
+// year-segmented historical-disaster and past-liquefaction educational
+// illustrations that flood keyword search results and could be mistaken
+// for current-risk layers.
+//
+// While auditing this generator's own output (2026-08-03), two more series
+// not named in STAFF_PROMPT.md were found and confirmed with the user
+// before excluding:
+//   - Bare-year ids like `1896_09_m29`/`1938_07_s13` whose names are
+//     historical rainfall/typhoon events (明治29年9月降雨, 阪神大水害,
+//     カスリーン台風, ...) -- same "past event confusable with current
+//     risk" problem as disasterhist_*/*_liq.
+//   - `gsjgeomap*` (866 entries, 5万分の1地質図幅 -- legitimate current
+//     geological survey data, just sharded per map sheet) and `ndvi_*`
+//     (105 entries, monthly vegetation index snapshots) -- not noise in
+//     the "misleading" sense, but excluded purely for size: this prompt
+//     needs to fit in a real AI's saved-system-prompt slot, and these two
+//     series alone account for the majority of the embedded catalog's
+//     size without being especially likely map requests.
+//   - 8-digit-date-prefixed disaster-response snapshot ids (e.g.
+//     `20130717dol`, `20240102_noto_suzu_0114do`) older than
+//     DISASTER_SNAPSHOT_MIN_YEAR -- these are one-off historical event
+//     photos (typhoons, past earthquakes) in the same GSI naming
+//     convention as the flagship demo id
+//     (`20260729kumamoto_yatsushiro_0729do_sokuho`, which this cutoff is
+//     designed to keep), but old enough that a live query is unlikely to
+//     ask for them specifically.
+const NOISE_ID_PREFIXES = ['disasterhist_', 'gsjgeomap', 'ndvi_'];
 const NOISE_ID_PATTERN = /^\d{4}_\d{2}[-_]/; // e.g. 1896_09_m29, 1953_08-09_s28_t
 const NOISE_IDS = new Set(['hyougokennnanbu_liq', 'nihonkaichubu_liq', 'niigata_liq', 'sanrikuharukaoki_liq']);
+const DISASTER_SNAPSHOT_ID_PATTERN = /^(19|20)\d{6}/; // e.g. 20130717dol, 20240102_noto_suzu_0114do
+const DISASTER_SNAPSHOT_MIN_YEAR = 2020; // keep 2020+ (Noto 2024, Kumamoto 2026, ...), drop older
+
+function disasterSnapshotYear(id) {
+  const match = id.match(DISASTER_SNAPSHOT_ID_PATTERN);
+  return match ? Number(id.slice(0, 4)) : null;
+}
 
 function isNoise(id) {
-  return NOISE_ID_PREFIXES.some((prefix) => id.startsWith(prefix)) || NOISE_ID_PATTERN.test(id) || NOISE_IDS.has(id);
+  if (NOISE_ID_PREFIXES.some((prefix) => id.startsWith(prefix))) return true;
+  if (NOISE_ID_PATTERN.test(id)) return true;
+  if (NOISE_IDS.has(id)) return true;
+  const snapshotYear = disasterSnapshotYear(id);
+  if (snapshotYear !== null && snapshotYear < DISASTER_SNAPSHOT_MIN_YEAR) return true;
+  return false;
 }
 
 async function fetchJson(url) {
@@ -95,7 +124,7 @@ bvmap背景地図・地形(hillshade/terrain)は常に自動描画される。\`
 
 ## カタログ1: layers-martin(既定、\`catalog=${LAYERS_MARTIN_CATALOG_URL}\`)
 
-国土地理院ほかの日本の地理空間データ全般。以下は全source_id(既知のノイズ系統(\`disasterhist_*\` — 地域別・年代別に細分化された災害履歴図シリーズ、および教育用イラストの液状化シリーズ4件)を除く、${layersMartinCount}件)。\`id|name\`形式、id昇順:
+国土地理院ほかの日本の地理空間データ全般。以下は全source_id(サイズ・ノイズの都合で一部除外、${layersMartinCount}件)。除外内容: \`disasterhist_*\`(地域別・年代別に細分化された災害履歴図シリーズ)・教育用イラストの液状化シリーズ4件・年代別の過去災害イラスト系列・\`gsjgeomap*\`(5万分の1地質図幅、866件、サイズが大きいため)・\`ndvi_*\`(月次植生指数、105件、同)・ローカルidの災害対応速報画像で${DISASTER_SNAPSHOT_MIN_YEAR}年より前のもの(${DISASTER_SNAPSHOT_MIN_YEAR}年以降は収録)。\`id|name\`形式、id昇順:
 
 \`\`\`text
 ${layersMartinList}

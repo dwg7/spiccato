@@ -10,7 +10,7 @@
 
 ## 現在の状態(2026-08-03時点、MCPスタイル(stdio・Workers版)実装後)
 
-**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。**実装順序はstdio → Workers → 源内 → (完成後に)オープンウェブの分解を深める**、と明確化済み。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D12、**このリポジトリ自身に置く形に確定**)は実装完了。次はオープンウェブスタイルの分解の深掘り。
+**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。**実装順序はstdio → Workers → 源内 → (完成後に)オープンウェブの分解を深める**、と明確化済み。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D12/D13、**このリポジトリ自身に置く形に確定**)は実装完了。次はオープンウェブスタイルの分解の深掘り。
 
 ### 実装済み・動作確認済み
 
@@ -51,7 +51,8 @@
   1. 最初`hfu/layers-martin`に、`STAFF_PROMPT.md`を抜粋・圧縮した精選版(3,966字)として置いた(D10、同リポジトリD28)。
   2. フォーム画面から発見できなかったため`scripts/fetch-gennai-prompt.mjs`でUIに配線した(D11)。
   3. ユーザー判断により方針転換: (a)`hfu/layers-martin`のD23判断(全カタログ埋め込みは保守負荷過大)を今回は踏み越え、カタログを既知のノイズ系統を除き全件埋め込むべき、(b)内容がspiccato固有のインタフェースに依存するため、`hfu/layers-martin`ではなくこのリポジトリに置くべき、との指摘を受け、D12で全面作り直し。`hfu/layers-martin`側のD28はSupersededにした。
-  - **現状**(D12): `scripts/build-gennai-prompt.mjs`(新設、`fetch-gennai-prompt.mjs`を置き換え)が`prebuild`のたびにlayers-martin・stars-optgeoの実カタログをfetchし、既知のノイズ系統(`disasterhist_*`、液状化イラスト4件、`\d{4}_\d{2}[-_]`パターンの過去災害イラスト60件 — 3つ目は監査中に新規発見、ユーザー確認済み)を除いた全件(layers-martin 1,682件+stars-optgeo 7件、計66,860字)を`GENNAI_PROMPT.md`(リポジトリルート)に埋め込む。`src/main.ts`は`../GENNAI_PROMPT.md?raw`を直接import。フォーム画面のdisclosure UI自体はD11のまま。
+  4. **D12でも実際には長すぎた** — ユーザーが手元のChatGPTに読み込ませたところ失敗(66,860字)。追加削減をD13で実施: `gsjgeomap*`(866件、地質図幅)・`ndvi_*`(105件、月次植生指数)をサイズ都合で除外、災害対応速報画像系(8桁日付プレフィックス)は2020年より前を除外(2020年以降・熊本地震2026・能登半島地震2024は維持)。
+  - **現状**(D13): `scripts/build-gennai-prompt.mjs`が`prebuild`のたびにlayers-martin・stars-optgeoの実カタログをfetchし、上記の除外を適用した上で**17,870字**(layers-martin 501件+stars-optgeo 7件)を`GENNAI_PROMPT.md`(リポジトリルート)に埋め込む。`src/main.ts`は`../GENNAI_PROMPT.md?raw`を直接import。フォーム画面のdisclosure UI自体はD11のまま。実際に源内やChatGPTで読み込めるかは要再確認 — まだ大きい場合は`DISASTER_SNAPSHOT_MIN_YEAR`引き上げ等でさらに削減できる。
   - spiccatoサイトに埋め込まれた3件のサンプル質問(熊本地震オルソ画像・石狩川治水・北海道火山土地条件図)で実機検証済み(D11時点、内容は変わってもリンク構築ロジックは同じなので引き続き妥当)。
 - **MCPスタイル stdio・Workers版**(D10、2026-08-03実装) — 上記参照。
 

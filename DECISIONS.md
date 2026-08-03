@@ -17,7 +17,8 @@
 | [D9](#d9-背景地図bvmapの表示非表示トグル) | 背景地図(bvmap)の表示/非表示トグル | Accepted | 2026-08-03 |
 | [D10](#d10-staffの複数スタイル源内mcpオープンウェブと-mcpスタイルstdioworkers版の実装) | Staffの複数スタイル(源内・MCP・オープンウェブ)と、MCPスタイル(stdio・Workers版)の実装 | Accepted(MCP部分)/Proposed(源内・オープンウェブ) | 2026-08-03 |
 | [D11](#d11-gennai_promptmdをフォーム画面から発見できるようにする) | `GENNAI_PROMPT.md` をフォーム画面から発見できるようにする | Accepted(取得元はD12で変更) | 2026-08-03 |
-| [D12](#d12-gennai_promptmdをこのリポジトリへ移設し全カタログ埋め込み版に作り直す) | `GENNAI_PROMPT.md` をこのリポジトリへ移設し、全カタログ埋め込み版に作り直す | Accepted | 2026-08-03 |
+| [D12](#d12-gennai_promptmdをこのリポジトリへ移設し全カタログ埋め込み版に作り直す) | `GENNAI_PROMPT.md` をこのリポジトリへ移設し、全カタログ埋め込み版に作り直す | Accepted(サイズはD13で再縮小) | 2026-08-03 |
+| [D13](#d13-gennai_promptmdが実際に長すぎたためサイズ優先で追加削減する) | `GENNAI_PROMPT.md` が実際に長すぎたため、サイズ優先で追加削減する | Accepted | 2026-08-03 |
 
 ---
 
@@ -272,3 +273,22 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 **検証**: 本番相当ビルド(`npm run build && npm run preview`)で実機確認。disclosureを開くと生成された全文(66,859字、`.trim()`後)が表示され、`20260729kumamoto_yatsushiro_0729do_sokuho`・`lcmfc2`等の実在idが含まれること、`disasterhist_*`・`\d{4}_\d{2}[-_]`パターンの実データ行が1件も含まれないこと(プロンプト説明文中の`disasterhist_*`という文字列自体はヒットするが、実データ行としては0件)を確認した。コンソールエラー無し。
 
 **Consequences**: `hfu/layers-martin`はカタログ生成(`build_catalog.rb`)に専念する形に戻った(同リポジトリREADME.md/DECISIONS.md/HANDOVER.mdを更新済み)。このリポジトリの`prebuild`は毎回2つの外部カタログ(layers-martin・stars-optgeo)をfetchするようになり、ビルド時間・ネットワーク依存が増えた(既存の`STAFF_PROMPT.md`fetchと同種の依存が1つ増えただけで、新しいカテゴリのリスクではない)。`docs/index.html`のサイズが約94KB増加した(1,320KB→1,414KB、圧縮テキストの埋め込み分)。ノイズ除外パターンが将来また見つかった場合は、`scripts/build-gennai-prompt.mjs`の`NOISE_ID_PREFIXES`/`NOISE_ID_PATTERN`/`NOISE_IDS`に追記する運用とする。
+
+## D13: `GENNAI_PROMPT.md` が実際に長すぎたため、サイズ優先で追加削減する
+
+**Status**: Accepted
+
+**Context**: D12公開後、ユーザーが手元のChatGPTに実際に読み込ませたところ、長すぎて読み込まれなかった(66,860字)。実機での失敗が確認されたため、レイヤーを追加で削減する必要が生じた。
+
+ユーザーから「2016年までの災害関係情報と、`gsjgeomap`、`ndvi_`シリーズは割愛しようか」と提案があった。`gsjgeomap`(866件、5万分の1地質図幅)・`ndvi_`(105件、月次植生指数)は具体的なidパターンとして明確だったが、「2016年までの災害関係情報」は`name`に年+災害関連キーワードが入っている想定で検索しても0件だった。ユーザーに実例を提示してもらったところ、`20130717dol`・`20240102_noto_suzu_0114do`のような**8桁日付プレフィックスの災害対応速報画像**(GSIの命名規則で、`20260729kumamoto_yatsushiro_0729do_sokuho`(熊本地震フラグシップ例)と同一系統)を指していたと判明。この系統は1948〜2026年に259件存在し、単純に「全部除外」すると熊本地震の例自体も失われ、「年より古いものだけ除外」だと能登半島地震(2024年)のような比較的最近の実績も失われるというトレードオフがあったため、カットオフ年をユーザーに確認した。
+
+**Decision**: `scripts/build-gennai-prompt.mjs`の`isNoise`にD12の3条件に加えて2条件を追加した。
+
+- **`NOISE_ID_PREFIXES`に`gsjgeomap`・`ndvi_`を追加**。これらはD12の「意味的ノイズ(過去の災害と現在のリスクの混同)」とは性質が異なり、内容は正当な現行データ(地質図幅・植生指数)だが、埋め込みサイズの都合で除外する。D12で確認済みの通り、地理的・時間的に分割されているだけで内容自体は正当。
+- **`DISASTER_SNAPSHOT_ID_PATTERN`(`^(19|20)\d{6}`、8桁日付プレフィックス)+`DISASTER_SNAPSHOT_MIN_YEAR = 2020`**: 2020年より前の日付を持つ災害対応速報画像系のidを除外する。2020年以降(能登半島地震2024・熊本地震2026を含む、約47件)は維持する。
+
+**結果**: 66,860字(layers-martin 1,682件+stars-optgeo 7件)→ **17,870字**(layers-martin 501件+stars-optgeo 7件)。約73%削減。
+
+**検証**: 再生成後、本番相当ビルド(`npm run build && npm run preview`)で実機確認。`gsjgeomap`/`ndvi_`の実データ行が0件、2020年より前の災害対応速報画像(例: `20130717dol`)が0件である一方、熊本地震(`20260729kumamoto_yatsushiro_0729do_sokuho`)・能登半島地震(`20240102_noto_*`)・既存の主要例(`lcmfc2`・`terrainclassification1`・`01_flood_l2_shinsuishin_data`)は引き続き含まれることを確認した。コンソールエラー無し。
+
+**Consequences**: `docs/index.html`のサイズがD12時点(1,340KB)から縮小した(D10時点の1,320KBに近い水準に戻った)。実際に源内(またはChatGPT等)が読み込める上限は依然未検証 — 17,870字でも大きい場合、`DISASTER_SNAPSHOT_MIN_YEAR`を引き上げる、または`gsjgeomap`/`ndvi_`と同様の「サイズ優先の除外」対象をさらに広げる、といった追加調整の余地を残す。除外パターンが増えるたびに`scripts/build-gennai-prompt.mjs`のコメントに理由(意味的ノイズかサイズかを明記)を追記する運用とする。
