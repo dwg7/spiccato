@@ -8,9 +8,11 @@
 
 **現在地**: https://dwg7.github.io/spiccato/ で公開中、動作確認済み。
 
-## 現在の状態(2026-08-03時点、MCPスタイル(stdio・Workers版)実装後)
+## 現在の状態(2026-08-06時点、源内スタイル最終形(D15)・Map Intent寛容化(D14)実装後)
 
-**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。**実装順序はstdio → Workers → 源内 → (完成後に)オープンウェブの分解を深める**、と明確化済み。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D12/D13、**このリポジトリ自身に置く形に確定**)は実装完了。次はオープンウェブスタイルの分解の深掘り。
+**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。**実装順序はstdio → Workers → 源内 → (完成後に)オープンウェブの分解を深める**、と明確化済み。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D10〜D15、**このリポジトリ自身に置く全カタログ埋め込み版に確定**)は実装完了。次はオープンウェブスタイルの分解の深掘り。
+
+**このセッションで別途発生した横道**: ユーザーが実際に源内・ChatGPTでMap Intentを試したところエラーが多発していると報告があり、(a)`parseMapIntent`が儀礼的だが未使用のフィールドで弾いていた問題をCartographer側の寛容化で解決(D14)、(b)GENNAI_PROMPT.mdのSTAFF_PROMPT.mdとの内容差分分析→サイズ削減(D13)の撤回・内容拡充(D15)→`hfu/layers-martin`のSTAFF_PROMPT.md自体もspiccato対応に更新(同リポジトリD29)、という3段構えの対応をした。**まだユーザーから具体的なエラー事例(質問内容・返ってきたYAML・エラーメッセージ)は届いていない** — 次のセッションで最優先の確認事項。
 
 ### 実装済み・動作確認済み
 
@@ -22,6 +24,7 @@
 - 実機検証: 熊本地震オルソ画像・全国津波浸水想定・御嶽山噴火(2014)衛星SAR画像のいずれも、リアルタイムでStaff役を演じてカタログ照会→Map Intent構築→リンク生成→本番サイトでの描画確認まで完了
 - GitHub Pages公開済み、`.github/workflows/build-docs.yml`でmainへのpush時に自動ビルド・デプロイ
 - **MCPスタイル(D10、2026-08-03実装)**: `mcp/`(ローカルstdio版)・`worker/`(Cloudflare Workers版、Streamable HTTP・ステートレス)の2トランスポート。共通ロジック(`mcp/src/server.ts`/`catalog.ts`/`linkBuilder.ts`)は完全共有、`src/shorthand.ts`に`buildShorthandLink`(ライブビュー不要な#q=構築、`render.ts`用の`buildShorthandFragment`とロジック共有)を新設して再利用。4ツール(`list_catalogs`/`search_catalog`/`get_layer_info`/`build_spiccato_link`)。stdioは子プロセス越しの生JSON-RPCで、Workersは`wrangler dev`+`curl`で、それぞれ`initialize`→`tools/call`の実通信を確認済み。生成された`#q=`/`#m=`両方のリンクを本番相当ビルドで開いて描画確認済み(欠落レイヤー無し、コンソールエラー無し)
+- **Map Intent検証の寛容化(D14、2026-08-06実装)**: `src/normalizeIntent.ts`を新設し、`src/main.ts`の`handleSubmit`で`parseMapIntent`の手前に挟む。検証はされるが実際には一度も読まれないフィールド(`spec_version`・`provenance.generated_by`/`generated_at`/`intent_id`・カタログの`id`)と、既定値で代用可能なフィールド(カタログの`type`、既定`layers_txt`)だけを、欠けている場合に限り埋める。`goal`は既存の空文字列センチネル(D6の自動生成)を再利用。`src/mapIntent.ts`(D1のvendoring境界)は無改修。本当に無効なMap Intent(`required_layers`/`required_styles`が両方とも無い等)は従来通り正しく弾かれることを確認済み。ユニットテスト7件(`src/normalizeIntent.test.ts`)。
 
 ### 直近で直したバグ(重要、再発に注意)
 
@@ -34,15 +37,19 @@
 
 **検証方法の教訓**: このセッションで使った自動化ブラウザツールは、タブが`document.hidden: true`として扱われ`requestAnimationFrame`がほぼ発火しないという別の制約があり、スクリーンショットによる目視確認だけでは「まだ直っていない」のか「ツールの制約で見えないだけ」なのか切り分けられなかった。**次回この種の問題を調査する際は、目視確認より先に`map.isSourceLoaded('<source-id>')`をコンソールから直接呼ぶ方法を使うこと** — レンダーループの制約を受けにくく、ブール値で即座に確認できる。
 
+**GitHub Pagesデプロイが「まれに失敗する」問題(2026-08-06に本リポジトリでも再確認)**: pushしても`https://dwg7.github.io/spiccato/`に反映されないことがある。原因はGitHub純正の自動生成ワークフロー「pages build and deployment」が「job was not acquired by Runner of type hosted even after multiple attempts」で失敗すること(`gh run list`で確認できる)。**課金・トークン枯渇が原因ではないことを確認済み**(`dwg7`組織はGitHub Free、Actions分は$0.50が丸ごとpublicリポジトリ割引でカバーされ請求額$0、月2,000分中0分使用 — 2026-08-06、ユーザーが実際の課金画面で確認)。`hfu/layers-martin`・`hfu/faceless-cartographer`でも以前から知られている、GitHub側の一時的なランナー供給不足(この文書とは独立した既知の問題)。
+
+**対処法**: `gh api repos/dwg7/spiccato/pages/builds -X POST`で強制再デプロイすると、通常は(時間はかかることがあるが)解消する。`gh api repos/dwg7/spiccato/pages/builds/latest`で`status`(`building`/`built`/`errored`)を確認できる。
+
+**未解決の別件**: 独自CI `.github/workflows/build-docs.yml`(`on: push`で`typecheck`/`test`/`build`を走らせる)が、2026-08-06のpushでは一度も起動しなかった(`gh api repos/dwg7/spiccato/commits/<sha>/check-runs`で確認すると、GitHub純正の`pages-build-deployment`関連しか出てこない)。`workflow_dispatch`で手動起動すると正常に成功する。原因不明 — 組織`dwg7`のActionsポリシー(承認制など)が関係している可能性があり、ユーザーに`https://github.com/dwg7/spiccato/settings/actions`の確認を依頼済みだが、次のセッションでもまだ未解決なら追跡すること。実害は無い(pushする前に必ずローカルで`typecheck`/`test`/`build`を確認する運用を徹底しているため)が、CIの安全網が機能していない状態ではある。
+
 ### 未着手・フォローアップ
 
-0. **Map Intent検証エラーの実例待ち** — ユーザーが源内/ChatGPT等で実際にエラーを踏んでいる。D14で「儀礼的だが未使用のフィールド」(spec_version・provenance・カタログid/type)を`src/normalizeIntent.ts`で寛容化したが、これは推測に基づく一次対応。ユーザーから具体的な失敗例(質問内容・返ってきたYAML・エラーメッセージ)が来たら、儀礼フィールド以外の原因(本当の不具合)が混じっていないか追加調査すること
-1. **オープンウェブスタイルの深掘り(次のステップ)** — 源内完成につき着手可能。「決定的検索(`mcp/src/catalog.ts`のブラウザ移植)+極小LLMでの意図解釈(検索キーワード抽出のみ)+決定的ジオコーディング+人間が候補を選ぶUI」という分解の設計メモは計画ファイルに記録済み。まだプロトタイプ段階にすら入っていない
-2. **`#m=`の非推奨化(obsolete化)** — D7の条件1(`#q=`のrender_hints/cartographer_feedback拡張)はD8で実装済み。残りの条件(実用上十分な期間の安定稼働確認 → STAFF_PROMPT案内の更新 → 実際のコード削除の判断)はまだ。急ぐ必要は無い(D7参照)
-3. **`hfu/layers-martin`のSTAFF_PROMPT.md更新提案** — 適用していない(別リポジトリのため提案のみ)。提案文は下記の場所に保存している(セッション間で引き継がれない一時ディレクトリのため、消えていたら再作成が必要):
-   `/private/tmp/claude-501/-Users-hfu-faceless-cartographer/a4d543ce-4068-4052-92eb-b85d46f8d7bd/scratchpad/staff_prompt_spiccato_proposal.md`
-   要旨: 「正しいやりとりの形」第3項・第5項の差し替え案、`#q=`(推奨)→`#m=`(高機能時)→貼り付け(最終手段)の3段階フォールバックの明記、`.json`付きカタログURL使用の推奨。**D8・D10を踏まえた更新が必要**: `#m=`が本当に必要なのは複数カタログ・`required_styles`/`optional_styles`・`sharing_policy`明示的上書きの3ケースだけだと明記できるようになった。**MCPスタイル(D10)の案内も追加すべき** — コード実行環境が無くても`#q=`が使えるようになった今、STAFF_PROMPT.mdの3段階フォールバックに「MCP対応クライアントなら`mcp/`/`worker/`のツールを使う」という4つ目の選択肢を足すのが筋が良い
-4. **`hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案** — 適用していない(同上、提案のみ)。保存場所:
+1. **Map Intent検証エラーの実例待ち(最優先)** — ユーザーが源内/ChatGPT等で実際にエラーを踏んでいる。これまでに一次対応を2つ実施した(D14: 儀礼的だが未使用のフィールドをCartographer側で寛容化。D15: GENNAI_PROMPT.mdのサイズ削減撤回・STAFF_PROMPT.mdとの内容差分を埋める拡充)。**いずれも推測に基づく対応であり、実際のエラー事例(質問内容・返ってきたYAML・エラーメッセージ)はまだ届いていない**。届いたら、上記2つの対応で解消しているか、それとも別の原因(本当の不具合)が残っているかを確認すること
+2. **`build-docs.yml`がpushで起動しない件** — 上記「教訓」参照。ユーザーに組織`dwg7`のActions設定(`https://github.com/dwg7/spiccato/settings/actions`)確認を依頼済み、回答待ち。billing枯渇ではないことは確認済み(2026-08-06、月2,000分中0分使用)
+3. **オープンウェブスタイルの深掘り** — 源内完成につき着手可能。「決定的検索(`mcp/src/catalog.ts`のブラウザ移植)+極小LLMでの意図解釈(検索キーワード抽出のみ)+決定的ジオコーディング+人間が候補を選ぶUI」という分解の設計メモは計画ファイルに記録済み。まだプロトタイプ段階にすら入っていない
+4. **`#m=`の非推奨化(obsolete化)** — D7の条件1(`#q=`のrender_hints/cartographer_feedback拡張)はD8で実装済み。残りの条件(実用上十分な期間の安定稼働確認 → STAFF_PROMPT案内の更新 → 実際のコード削除の判断)はまだ。急ぐ必要は無い(D7参照)。**`hfu/layers-martin`のSTAFF_PROMPT.md更新自体はD29で完了済み**(下記「完了」参照) — 残るのは「実際に`#m=`のコードを削除するかどうか」という、より重い判断のみ
+5. **`hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案** — 未適用(別リポジトリのため提案のみ)。保存場所(セッション間で引き継がれない一時ディレクトリのため、消えていたら再作成が必要):
    `/private/tmp/claude-501/-Users-hfu-faceless-cartographer/a4d543ce-4068-4052-92eb-b85d46f8d7bd/scratchpad/faceless_cartographer_decisions_addendum_proposal.md`
 
 ### 完了(参考)
@@ -63,9 +70,10 @@
 
 ```
 spiccato/
-├── DECISIONS.md          # ADR、D1〜D10。設計判断の正
+├── DECISIONS.md          # ADR、D1〜D15。設計判断の正
 ├── HANDOVER.md            # このファイル
 ├── README.md
+├── GENNAI_PROMPT.md       # 源内スタイル、自動生成(D10〜D15)。手で編集しない
 ├── index.html
 ├── src/
 │   ├── types.ts / mapIntent.ts / catalog.ts / style.ts / base-style.json
@@ -73,6 +81,7 @@ spiccato/
 │   ├── dads-components.css
 │   ├── fragment.ts        # #m= コーデック(圧縮)、D3。mcp/worker双方から再利用(D10)
 │   ├── shorthand.ts       # #q= コーデック(無圧縮)、D6/D8。buildShorthandLinkはD10でmcp/worker用に新設
+│   ├── normalizeIntent.ts # 儀礼的フィールドの寛容化、D14。parseMapIntentの手前に挟む
 │   ├── main.ts             # bootstrap: #m= → #q= → 貼り付けフォームの順で試す
 │   ├── render.ts           # UI、ライブ状態反映(D8: #q=優先、収まらなければ#m=)
 │   └── *.test.ts
@@ -86,7 +95,8 @@ spiccato/
 ├── worker/                 # MCPサーバー、Cloudflare Workers版(D10、mcp/src/server.tsを再利用)
 │   ├── src/index.ts
 │   └── wrangler.toml
-├── scripts/fetch-staff-prompt.mjs   # prebuildフック(D19 in faceless-cartographer由来)
+├── scripts/fetch-staff-prompt.mjs      # prebuildフック(D19 in faceless-cartographer由来)
+├── scripts/build-gennai-prompt.mjs     # GENNAI_PROMPT.md生成、prebuildフック(D12〜D15)
 └── .github/workflows/build-docs.yml
 ```
 
@@ -109,15 +119,18 @@ npm run preview -- --port 4321 --strictPort   # ローカル確認用
 
 ---
 
-`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` と `DECISIONS.md`(特にD1・D2・D6・D7・D8・D9・D10)、および計画ファイル `/Users/hfu/.claude/plans/scalable-snacking-spring.md`(Staffの複数スタイル導入計画、残っていれば)を読んで状況を把握してください。
+`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` を全文読み、次に `DECISIONS.md` のD1・D2・D6〜D15(特にD14・D15が直近の変更)、計画ファイル `/Users/hfu/.claude/plans/scalable-snacking-spring.md`(Staffの複数スタイル導入計画、残っていれば)を読んで状況を把握してください。関連する `hfu/layers-martin` リポジトリ(`/Users/hfu/layers-martin`、ローカルにクローン済み)のD28・D29も、STAFF_PROMPT.md/GENNAI_PROMPT.mdの経緯を理解する上で参照してください。
 
-直近のフォローアップ候補(優先順は状況次第で判断してよい):
-1. **オープンウェブスタイルの深掘り**(次のステップ) — 「決定的検索+極小LLM意図解釈」分解の詳細化・小さなプロトタイプ着手。計画ファイルの該当節参照
-2. `#m=`の非推奨化計画(D7)の続き — 急ぎではない
-3. `hfu/layers-martin`のSTAFF_PROMPT.md更新提案、`hfu/faceless-cartographer`のDECISIONS.mdクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)。D8・D10を踏まえた更新が必要(MCPスタイルの案内追加も)
+**最優先事項**: ユーザーが源内・ChatGPT等でMap Intentを試して「結構エラーが出ている」と報告している件。D14(Cartographer側のフィールド寛容化)・D15(GENNAI_PROMPT.mdの内容拡充)という2つの一次対応を既に実施済みだが、**まだ具体的なエラー事例(質問内容・返ってきたYAML・エラーメッセージ)を受け取れていない**。ユーザーから事例が来たら、まずそれを読み、上記2対応で解消しているかを確認すること。存在しない`source_id`の捏造、`#q=`のURLエンコード誤り、YAML構文エラーなど、儀礼フィールド以外の本当の不具合が別に無いか注意深く見ること。
 
-bvmap背景地図の表示/非表示トグル(D9)、MCPスタイルstdio・Workers版(D10)、源内スタイル(`GENNAI_PROMPT.md`、このリポジトリ自身に置く全カタログ埋め込み版、D12)は実装済み。
+次点のフォローアップ候補(優先順は状況次第で判断してよい):
+1. **`build-docs.yml`が`push`で起動しない件** — 独自CI(typecheck/test/build)がpushイベントでは起動せず、`workflow_dispatch`の手動起動でのみ成功する。billing枯渇ではないことは確認済み(dwg7組織、2026-08-06時点で月2,000分中0分使用)。ユーザーに`https://github.com/dwg7/spiccato/settings/actions`の確認を依頼済み、回答が無ければ再度確認を促すこと。実害は無い(pushの前に必ずローカルでtypecheck/test/buildを確認する運用のため)が、CIの安全網として機能していない
+2. **オープンウェブスタイルの深掘り** — 「決定的検索+極小LLM意図解釈」分解の詳細化・小さなプロトタイプ着手。計画ファイルの該当節参照
+3. `#m=`の非推奨化計画(D7)の続き — 急ぎではない。`hfu/layers-martin`のSTAFF_PROMPT.md更新自体はD29で完了済み
+4. `hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)
 
-作業前に必ず `npm run build && npm run preview -- --port 4321 --strictPort` でローカルの本番相当ビルドを確認すること。ブラウザでの目視確認より先に、コンソールから `map.isSourceLoaded('<source-id>')` を直接呼ぶ方法を使うこと(HANDOVER.mdの教訓参照)。`mcp/`・`worker/`はそれぞれ独立した`npm install`が必要(ルートの`npm install`ではインストールされない)。
+bvmap背景地図の表示/非表示トグル(D9)、MCPスタイルstdio・Workers版(D10)、源内スタイル最終形(`GENNAI_PROMPT.md`、全カタログ埋め込み・STAFF_PROMPT.md互換、D10〜D15)、Map Intent検証の寛容化(D14)は実装済み。
+
+作業前に必ず `npm run build && npm run preview -- --port 4321 --strictPort` でローカルの本番相当ビルドを確認すること。ブラウザでの目視確認より先に、コンソールから `map.isSourceLoaded('<source-id>')` を直接呼ぶ方法を使うこと(HANDOVER.mdの教訓参照)。`mcp/`・`worker/`はそれぞれ独立した`npm install`が必要(ルートの`npm install`ではインストールされない)。GitHub Pagesへの反映が止まっている場合は`gh api repos/dwg7/spiccato/pages/builds -X POST`で強制再デプロイを試すこと(HANDOVER.mdの「教訓」参照)。
 
 ---
