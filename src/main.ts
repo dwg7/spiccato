@@ -1,4 +1,5 @@
 import { parseMapIntent } from './mapIntent.ts';
+import { normalizeIntent } from './normalizeIntent.ts';
 import { resolveLayers, resolveStyles } from './catalog.ts';
 import { buildStyle, computeInitialView } from './style.ts';
 import { renderFormView, renderMapView } from './render.ts';
@@ -73,7 +74,12 @@ async function renderIntent(intent: MapIntent, rawIntent: string | null): Promis
 }
 
 async function handleSubmit(rawIntent: string): Promise<void> {
-  const parsed = parseMapIntent(rawIntent);
+  // DECISIONS.md D14: fills in ceremonial-but-unread fields (spec_version,
+  // provenance.*, catalog id/type) before validation, so Staff agents that
+  // skip them aren't rejected on schema ceremony rather than substance.
+  // rawIntent itself (passed through below) stays as the author wrote it --
+  // only the copy fed to parseMapIntent is normalized.
+  const parsed = parseMapIntent(normalizeIntent(rawIntent));
   if (!parsed.ok) {
     showForm({ prefill: rawIntent, error: parsed.error });
     return;

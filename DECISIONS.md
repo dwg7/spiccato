@@ -19,6 +19,7 @@
 | [D11](#d11-gennai_promptmdをフォーム画面から発見できるようにする) | `GENNAI_PROMPT.md` をフォーム画面から発見できるようにする | Accepted(取得元はD12で変更) | 2026-08-03 |
 | [D12](#d12-gennai_promptmdをこのリポジトリへ移設し全カタログ埋め込み版に作り直す) | `GENNAI_PROMPT.md` をこのリポジトリへ移設し、全カタログ埋め込み版に作り直す | Accepted(サイズはD13で再縮小) | 2026-08-03 |
 | [D13](#d13-gennai_promptmdが実際に長すぎたためサイズ優先で追加削減する) | `GENNAI_PROMPT.md` が実際に長すぎたため、サイズ優先で追加削減する | Accepted | 2026-08-03 |
+| [D14](#d14-儀礼的だが未使用のフィールドでmap-intentが弾かれる問題をcartographer側の寛容化で解決する) | 儀礼的だが未使用のフィールドでMap Intentが弾かれる問題を、Cartographer側の寛容化で解決する | Accepted | 2026-08-03 |
 
 ---
 
@@ -292,3 +293,35 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 **検証**: 再生成後、本番相当ビルド(`npm run build && npm run preview`)で実機確認。`gsjgeomap`/`ndvi_`の実データ行が0件、2020年より前の災害対応速報画像(例: `20130717dol`)が0件である一方、熊本地震(`20260729kumamoto_yatsushiro_0729do_sokuho`)・能登半島地震(`20240102_noto_*`)・既存の主要例(`lcmfc2`・`terrainclassification1`・`01_flood_l2_shinsuishin_data`)は引き続き含まれることを確認した。コンソールエラー無し。
 
 **Consequences**: `docs/index.html`のサイズがD12時点(1,340KB)から縮小した(D10時点の1,320KBに近い水準に戻った)。実際に源内(またはChatGPT等)が読み込める上限は依然未検証 — 17,870字でも大きい場合、`DISASTER_SNAPSHOT_MIN_YEAR`を引き上げる、または`gsjgeomap`/`ndvi_`と同様の「サイズ優先の除外」対象をさらに広げる、といった追加調整の余地を残す。除外パターンが増えるたびに`scripts/build-gennai-prompt.mjs`のコメントに理由(意味的ノイズかサイズかを明記)を追記する運用とする。
+
+## D14: 儀礼的だが未使用のフィールドでMap Intentが弾かれる問題を、Cartographer側の寛容化で解決する
+
+**Status**: Accepted
+
+**Context**: ユーザーが源内・ChatGPT等でGENNAI_PROMPT.md/STAFF_PROMPT.mdを実際に試したところ、「結構エラーが出ている」との報告があった。具体的な再現例はまだ無いが、`src/mapIntent.ts`(D1でfaceless-cartographerからvendoring)の検証ロジックを読み直したところ、`parseMapIntent`が必須とするフィールドのうち、実際に下流(`catalog.ts`/`style.ts`/`render.ts`)で読まれているのは「カタログの`uri`」と「`required_layers`/`required_styles`の中身」だけで、残りは**検証だけされて一度も読まれない儀礼**であることが分かった:
+
+- `spec_version` — 一度も読まれない
+- `provenance.generated_by`/`generated_at`/`intent_id` — 一度も読まれない
+- `catalog_context.active_catalogs[*].id` — `catalog_id`として代入されるが、その値自体が下流のどこでも参照されない
+- `catalog_context.active_catalogs[*].type` — 実際に使われるが、未指定時に`layers_txt`と推測できる(`#q=`の`parseShorthandFragment`が既にそうしている)
+- `goal` — パネル表示にのみ使われ、空文字列の場合は解決後のレイヤー名から自動生成する仕組みが`main.ts`の`renderIntent`に既にある(D6)
+
+7項目中5項目がこの「検証はされるが実体が無い」に該当する。`src/shorthand.ts`の`parseShorthandFragment`(`#q=`)は、これらを全てコード側で合成してから同じ描画パイプラインに流しており、「著者が書かなくても描画は完全に成立する」ことは既に実証済みだった。
+
+**検討した対応方針、および却下した理由**:
+
+1. **Staffプロンプト側でこれらのフィールドを省略しないよう指導を強化する** — 却下。GENNAI_PROMPT.md/STAFF_PROMPT.mdは既にこれらのフィールドをテンプレートに含めている(D6/D10の例参照)にも関わらず、実際の生成AIの出力では省略されるケースが実測で頻発している。プロンプトを読ませる側の努力でこの種の脱落を完全に防ぐのは非現実的と判断した。
+2. **`UNopenGIS/staccato-spec`のMap Intentスキーマ自体を変更する(必須項目を減らす)** — 却下(今回は不要)。上流の規範仕様変更であり、`hfu/faceless-cartographer`を含む他実装との合意が要る大きな変更。今回困っているのはspiccato側の受け入れ挙動であり、スキーマそのものを変える理由が無い。
+3. **`src/mapIntent.ts`を直接編集して検証を緩める** — 却下。D1で「faceless-cartographerからvendoring、無改修」と明記した境界を初めて破ることになる。パーサーの寛容さはURL状態の方針とは独立した軸であり、vendoring境界を破ってまで変更する理由が無い。
+
+**Decision**: **Cartographer(このリポジトリ)だけを寛容にする**。Staffに要求する内容もMap Intentのスキーマ自体も変えず、Postelの法則を受信側だけに適用する。
+
+具体的には、`src/normalizeIntent.ts`を新設し、`parseMapIntent`の**手前**に挟む:
+
+- `normalizeIntent(yamlText: string): string`は、YAMLをパースして儀礼的フィールドの欠落を検出し、埋めてから再度YAML文字列としてダンプする。埋める値: `spec_version: "map-intent/v2"`、`goal: ""`(D6の自動生成センチネルを再利用)、`active_catalogs[*].id: "catalog-${i}"`、`active_catalogs[*].type: "layers_txt"`、`provenance.generated_by: "unknown"`/`generated_at`/`intent_id`(現在時刻ベース)。
+- 判断に自信が持てない入力(YAML構文エラー、トップレベルがマッピングでない)は**無変更のまま返す** — `parseMapIntent`自身がより具体的なエラーを出せるようにするため。既存フィールドは一切上書きしない(埋めるのは欠落時のみ)。
+- `src/main.ts`の`handleSubmit`で`parseMapIntent(normalizeIntent(rawIntent))`という形で挟む。`renderIntent`に渡す`rawIntent`自体は正規化前の原文のまま(「Copy Map Intent」が著者の元の(儀礼無しの)文書を再現するため、正規化はパイプラインの入り口だけで起こる一過性の処理)。
+
+**検証**: 本番相当ビルド(`npm run build && npm run preview`)で実機確認。`spec_version`・`goal`・`provenance`・カタログの`id`/`type`を全て省略した最小Map Intent(`catalog_context.active_catalogs[].uri`と`required_layers[].source_id`のみ)を貼り付けフォームに投入し、正しく描画されることを確認した(goalは自動生成された`治水地形分類図 を表示。`が表示された)。一方、`required_layers`/`required_styles`を両方とも欠いた(実質的に無効な)Map Intentは、正規化後も正しく`Map Intent must have at least one non-empty "required_layers" or "required_styles" array.`エラーで弾かれることを確認し、本当の不備を握りつぶしていないことを確認した。ユニットテスト7件(`src/normalizeIntent.test.ts`)追加、既存フィールドを上書きしないこと・無効なYAML/非マッピングは無変更で返すことも個別にテスト済み。
+
+**Consequences**: `src/main.ts`の`handleSubmit`のみ変更(1箇所)。`src/mapIntent.ts`(D1のvendoring境界)は無改修のまま。`provenance`(誰が生成したかの追跡可能性)を`"unknown"`等の既定値で埋めることは、staccatoアーキテクチャの追跡可能性という建前をわずかに弱めるが、spiccato自身がこの値を一度も読んでおらず、省略したStaffはそもそも追跡情報を持っていないため実害は無いと判断した。これは`source_id`の捏造(地図の中身を偽ること)とは性質が異なり、「捏造しないこと」の原則には抵触しない。ユーザーから具体的なエラー事例が別途提供された場合、儀礼フィールド以外の原因(実際の不具合)が混じっていないか追加調査する。

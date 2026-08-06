@@ -31,7 +31,7 @@ bvmap背景地図・地形(hillshade/terrain)は常に自動描画される。`r
 
 ## カタログ1: layers-martin(既定、`catalog=https://hfu.github.io/layers-martin/catalog.json`)
 
-国土地理院ほかの日本の地理空間データ全般。以下は全source_id(サイズ・ノイズの都合で一部除外、501件)。除外内容: `disasterhist_*`(地域別・年代別に細分化された災害履歴図シリーズ)・教育用イラストの液状化シリーズ4件・年代別の過去災害イラスト系列・`gsjgeomap*`(5万分の1地質図幅、866件、サイズが大きいため)・`ndvi_*`(月次植生指数、105件、同)・ローカルidの災害対応速報画像で2020年より前のもの(2020年以降は収録)。`id|name`形式、id昇順:
+国土地理院ほかの日本の地理空間データ全般。以下は全source_id(サイズ・ノイズの都合で一部除外、504件)。除外内容: `disasterhist_*`(地域別・年代別に細分化された災害履歴図シリーズ)・教育用イラストの液状化シリーズ4件・年代別の過去災害イラスト系列・`gsjgeomap*`(5万分の1地質図幅、866件、サイズが大きいため)・`ndvi_*`(月次植生指数、105件、同)・ローカルidの災害対応速報画像で2020年より前のもの(2020年以降は収録)。`id|name`形式、id昇順:
 
 ```text
 01_flood_l1_shinsuishin_newlegend_data|洪水浸水想定区域（計画規模（現在の凡例））
@@ -121,6 +121,8 @@ bvmap背景地図・地形(hillshade/terrain)は常に自動描画される。`r
 20250815rain_amakusa_0815do_sokuho|天草上島地区（8/15撮影）
 20250815rain_yatsushirohigashi_0816do_sokuho|八代東地区（8/16撮影）
 20250815rain_yatsushironishi_0816do_sokuho|八代西地区（8/16撮影）
+20260729kumamoto_kumamoto3_0731_0801do|熊本３地区（7/31、8/1撮影）
+20260729kumamoto_yatsushiro_0729do|八代地区（7/29撮影）
 20260729kumamoto_yatsushiro_0729do_sokuho|八代地区（7/29撮影）
 afm|活断層図（都市圏活断層図）
 airphoto|簡易空中写真（2004年～）
@@ -485,6 +487,7 @@ southpole_satellite_250000|1:250,000　南極衛星画像図（楕円体高版�
 southpole_satellite_250000_2|1:250,000　南極衛星画像図（標高版）
 southpole_spec_ras|南極の地理空間情報（整備範囲）
 std|標準地図
+std_renewal_test|標準地図リニューアル版（試験公開）
 swale|明治期の低湿地
 tarumaered|赤色立体地図（樽前山周辺）
 terrainclassification1|地形分類図
