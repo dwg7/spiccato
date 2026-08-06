@@ -20,6 +20,7 @@
 | [D12](#d12-gennai_promptmdをこのリポジトリへ移設し全カタログ埋め込み版に作り直す) | `GENNAI_PROMPT.md` をこのリポジトリへ移設し、全カタログ埋め込み版に作り直す | Accepted(サイズはD13で再縮小) | 2026-08-03 |
 | [D13](#d13-gennai_promptmdが実際に長すぎたためサイズ優先で追加削減する) | `GENNAI_PROMPT.md` が実際に長すぎたため、サイズ優先で追加削減する | Accepted | 2026-08-03 |
 | [D14](#d14-儀礼的だが未使用のフィールドでmap-intentが弾かれる問題をcartographer側の寛容化で解決する) | 儀礼的だが未使用のフィールドでMap Intentが弾かれる問題を、Cartographer側の寛容化で解決する | Accepted | 2026-08-03 |
+| [D15](#d15-gennai_promptmdのサイズ削減d13を撤回しstaff_promptmdとの互換性を優先する) | `GENNAI_PROMPT.md`のサイズ削減(D13)を撤回し、STAFF_PROMPT.mdとの互換性を優先する | Accepted | 2026-08-06 |
 
 ---
 
@@ -325,3 +326,22 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 **検証**: 本番相当ビルド(`npm run build && npm run preview`)で実機確認。`spec_version`・`goal`・`provenance`・カタログの`id`/`type`を全て省略した最小Map Intent(`catalog_context.active_catalogs[].uri`と`required_layers[].source_id`のみ)を貼り付けフォームに投入し、正しく描画されることを確認した(goalは自動生成された`治水地形分類図 を表示。`が表示された)。一方、`required_layers`/`required_styles`を両方とも欠いた(実質的に無効な)Map Intentは、正規化後も正しく`Map Intent must have at least one non-empty "required_layers" or "required_styles" array.`エラーで弾かれることを確認し、本当の不備を握りつぶしていないことを確認した。ユニットテスト7件(`src/normalizeIntent.test.ts`)追加、既存フィールドを上書きしないこと・無効なYAML/非マッピングは無変更で返すことも個別にテスト済み。
 
 **Consequences**: `src/main.ts`の`handleSubmit`のみ変更(1箇所)。`src/mapIntent.ts`(D1のvendoring境界)は無改修のまま。`provenance`(誰が生成したかの追跡可能性)を`"unknown"`等の既定値で埋めることは、staccatoアーキテクチャの追跡可能性という建前をわずかに弱めるが、spiccato自身がこの値を一度も読んでおらず、省略したStaffはそもそも追跡情報を持っていないため実害は無いと判断した。これは`source_id`の捏造(地図の中身を偽ること)とは性質が異なり、「捏造しないこと」の原則には抵触しない。ユーザーから具体的なエラー事例が別途提供された場合、儀礼フィールド以外の原因(実際の不具合)が混じっていないか追加調査する。
+
+## D15: `GENNAI_PROMPT.md`のサイズ削減(D13)を撤回し、STAFF_PROMPT.mdとの互換性を優先する
+
+**Status**: Accepted
+
+**Context**: ユーザーがGENNAI_PROMPT.mdをMS Copilotで実際に試したところ、文字数の多さそのものは問題ではないとの所見を得た(D13の前提 — 「大きすぎて読み込まれない」— の再検証)。また、ユーザー自身がGENNAI_PROMPT.mdとSTAFF_PROMPT.mdの内容差分を分析するよう依頼し、その結果、非カタログ部分(プロセス指示)がSTAFF_PROMPT.mdの約23%(4.3分の1)まで圧縮されていたこと、および「Cartographer(参照実装)の能力」「既知の欠落」「意味解決の指針」の各節がほぼ丸ごと欠落していたことが判明した(この分析自体はDECISIONS.md本文には転記していない、セッション記録参照)。
+
+これを受け、ユーザーから明確な方針転換の指示があった: サイズ削減(D13)は撤回し、正確さ・STAFF_PROMPT.mdとの互換性を優先する。
+
+**Decision**: `scripts/build-gennai-prompt.mjs`を2点変更した。
+
+1. **D13で追加した3種類のサイズ駆動の除外を撤回**: `gsjgeomap*`(866件、地質図幅)・`ndvi_*`(105件、月次植生指数)・`DISASTER_SNAPSHOT_MIN_YEAR`(2020年)による災害対応速報画像の年代カットオフ、をすべて削除した。D12由来の意味的ノイズ除外(`disasterhist_*`・液状化イラスト4件・年代別過去災害イラストパターン)のみ残す。結果、layers-martin側の収録件数は504件→1,685件に戻った(D12相当、カタログの自然増減により若干の差はある)。
+2. **プロンプト本文を拡充し、STAFF_PROMPT.mdとの内容対応を強化**: 「Cartographer(spiccato)の現在の能力を踏まえること」節(背景地図自動描画・等高線描画順・3D地形のUI操作・`optional_layers`既定非表示・凡例表示条件・Copy Map Intent/Copy Linkボタンの挙動)を新設。「カタログ1」節に「既知の制約」小節(地理的カバレッジ・同名候補の判断・現在のリスクと過去の事例の区別)を追加。「例」節を1件から3件(土砂災害警戒区域・石狩川治水・火山土地条件図)に拡充し、STAFF_PROMPT.mdの3つの動作確認済み例に対応させた。ヘッダーに「この2つは内容面で対応するよう保守している」旨を明記した。各記述は、実際の`src/render.ts`/`src/style.ts`の挙動(vendoring元がfaceless-cartographerであるため、STAFF_PROMPT.mdの記述の多くがspiccatoにもそのまま当てはまる)を確認した上で、spiccato固有の相違(凡例はパネル内インライン表示であり「右下折りたたみ」ではない等)がある箇所は正しく書き分けた。
+
+**方向転換をSTAFF_PROMPT.md側にも訴求する**: `hfu/layers-martin`の`STAFF_PROMPT.md`「正しいやりとりの形」第5項「共有の一次artifactは Map Intent のテキスト自体である。URLを共有手段として扱ってはならない。」は、spiccatoの設計と正面から矛盾していたため、この機会に削除・書き換えを提案しユーザーの同意を得て適用した(`hfu/layers-martin` DECISIONS.md D29、実装は同リポジトリ側)。2026-08-03時点でscratchpadに下書きされていた提案が未適用のまま残っていたものを、今回正式に適用した。
+
+**検証**: 再生成後、本番相当ビルド(`npm run build && npm run preview`)で実機確認。`gsjgeomap`/`ndvi_`/2020年より前の災害対応速報画像が復元されていること、コンソールエラー無しであることを確認した。
+
+**Consequences**: `docs/index.html`のサイズがD13時点から再度増加した(カタログ埋め込み量がD12相当に戻ったため)。実際の源内・ChatGPT等での読み込み可否は依然ユーザー確認待ち — 今回の分析により「サイズではなく内容の欠落がエラーの主因だったのでは」という仮説に基づく方針転換であり、確定した結論ではない。今後、実際のエラー事例が得られた場合、サイズ・内容いずれが真因かを改めて切り分ける必要がある。

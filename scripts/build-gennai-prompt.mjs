@@ -26,53 +26,33 @@ const LAYERS_MARTIN_CATALOG_URL = 'https://hfu.github.io/layers-martin/catalog.j
 const STARS_OPTGEO_CATALOG_URL = 'https://stars.optgeo.org/catalog';
 const TARGET = fileURLToPath(new URL('../GENNAI_PROMPT.md', import.meta.url));
 
-// Known-noise id series.
+// Known-noise id series -- semantic noise only, not size-driven exclusion.
+//
+// D13 (2026-08-03) additionally excluded gsjgeomap*/ndvi_* and pre-2020
+// disaster-response snapshots purely to shrink the prompt for a suspected
+// AI system-prompt size limit. That assumption turned out to be wrong (no
+// errors were actually caused by length) and correctness/compatibility
+// with STAFF_PROMPT.md matters more than trimming, so D15 reverted those
+// three exclusions -- see DECISIONS.md D15. Only genuine semantic noise
+// stays excluded:
 //
 // `disasterhist_*` and the four `*_liq` ids are documented by name in
 // hfu/layers-martin's STAFF_PROMPT.md "意味解決の指針" section: region/
 // year-segmented historical-disaster and past-liquefaction educational
 // illustrations that flood keyword search results and could be mistaken
-// for current-risk layers.
-//
-// While auditing this generator's own output (2026-08-03), two more series
-// not named in STAFF_PROMPT.md were found and confirmed with the user
-// before excluding:
-//   - Bare-year ids like `1896_09_m29`/`1938_07_s13` whose names are
-//     historical rainfall/typhoon events (明治29年9月降雨, 阪神大水害,
-//     カスリーン台風, ...) -- same "past event confusable with current
-//     risk" problem as disasterhist_*/*_liq.
-//   - `gsjgeomap*` (866 entries, 5万分の1地質図幅 -- legitimate current
-//     geological survey data, just sharded per map sheet) and `ndvi_*`
-//     (105 entries, monthly vegetation index snapshots) -- not noise in
-//     the "misleading" sense, but excluded purely for size: this prompt
-//     needs to fit in a real AI's saved-system-prompt slot, and these two
-//     series alone account for the majority of the embedded catalog's
-//     size without being especially likely map requests.
-//   - 8-digit-date-prefixed disaster-response snapshot ids (e.g.
-//     `20130717dol`, `20240102_noto_suzu_0114do`) older than
-//     DISASTER_SNAPSHOT_MIN_YEAR -- these are one-off historical event
-//     photos (typhoons, past earthquakes) in the same GSI naming
-//     convention as the flagship demo id
-//     (`20260729kumamoto_yatsushiro_0729do_sokuho`, which this cutoff is
-//     designed to keep), but old enough that a live query is unlikely to
-//     ask for them specifically.
-const NOISE_ID_PREFIXES = ['disasterhist_', 'gsjgeomap', 'ndvi_'];
+// for current-risk layers. Bare-year ids like `1896_09_m29`/`1938_07_s13`
+// (historical rainfall/typhoon events: 明治29年9月降雨, 阪神大水害,
+// カスリーン台風, ...) were found while auditing this generator's own
+// output (2026-08-03) to have the same problem and were added for the
+// same reason.
+const NOISE_ID_PREFIXES = ['disasterhist_'];
 const NOISE_ID_PATTERN = /^\d{4}_\d{2}[-_]/; // e.g. 1896_09_m29, 1953_08-09_s28_t
 const NOISE_IDS = new Set(['hyougokennnanbu_liq', 'nihonkaichubu_liq', 'niigata_liq', 'sanrikuharukaoki_liq']);
-const DISASTER_SNAPSHOT_ID_PATTERN = /^(19|20)\d{6}/; // e.g. 20130717dol, 20240102_noto_suzu_0114do
-const DISASTER_SNAPSHOT_MIN_YEAR = 2020; // keep 2020+ (Noto 2024, Kumamoto 2026, ...), drop older
-
-function disasterSnapshotYear(id) {
-  const match = id.match(DISASTER_SNAPSHOT_ID_PATTERN);
-  return match ? Number(id.slice(0, 4)) : null;
-}
 
 function isNoise(id) {
   if (NOISE_ID_PREFIXES.some((prefix) => id.startsWith(prefix))) return true;
   if (NOISE_ID_PATTERN.test(id)) return true;
   if (NOISE_IDS.has(id)) return true;
-  const snapshotYear = disasterSnapshotYear(id);
-  if (snapshotYear !== null && snapshotYear < DISASTER_SNAPSHOT_MIN_YEAR) return true;
   return false;
 }
 
@@ -93,7 +73,7 @@ function formatEntries(entries) {
 function buildPrompt({ layersMartinList, layersMartinCount, starsOptgeoList, starsOptgeoCount, starsOptgeoStyleIds }) {
   return `# GENNAI_PROMPT.md
 
-システムプロンプトは保存できるがインターネットに一切アクセスできない生成AI(例: 政府AI「源内」)向けの、単独で完結するStaffプロンプト。フル版は[hfu/layers-martin STAFF_PROMPT.md](https://github.com/hfu/layers-martin/blob/main/STAFF_PROMPT.md)(カタログをその場でfetchできる環境向け)。
+システムプロンプトは保存できるがインターネットに一切アクセスできない生成AI(例: 政府AI「源内」)向けの、単独で完結するStaffプロンプト。フル版は[hfu/layers-martin STAFF_PROMPT.md](https://github.com/hfu/layers-martin/blob/main/STAFF_PROMPT.md)(カタログをその場でfetchできる環境向け)。**この2つは内容面で対応するよう保守している**(DECISIONS.md D15) — 差分があるのは「インターネット接続の有無」と「対象Cartographer(spiccato固有かどうか)」に由来する部分のみのはず。
 
 **このファイルは自動生成される**(\`scripts/build-gennai-prompt.mjs\`、\`npm run build\`のprebuildで毎回、layers-martin/stars-optgeoの実カタログから再生成)。手で編集しないこと。生成日時はこのファイル自体には埋め込まない(diffノイズを避けるため) — 最新版は常にこのリポジトリの\`main\`ブランチを参照すること。
 
@@ -101,7 +81,7 @@ function buildPrompt({ layersMartinList, layersMartinCount, starsOptgeoList, sta
 
 Staccatoアーキテクチャ(User/Staff/Cartographer/Library、\`UNopenGIS/staccato-spec\`)における**Staff**。利用者の自然言語の問いから**Map Intent**を生成する。「なぜその判断か」は内部処理に留め、Map Intentには「何を描画するか」だけを載せる。エンタープライズ内部の機微な文脈をMap Intentに含めない。
 
-使えるカタログは下記の2件のみ。他のカタログを推測・自動発見しない。\`source_id\`/\`style_id\`は下記リストに実在するものだけを使う。**リストに無い場合、それらしいidを作らず「見つからない」と正直に言う**(捏造は最重要の禁止事項 — 過去に\`lcmfc2\`のつもりで存在しない\`lcmfc2_1\`を出力した例が観測されている)。同じ主題を指しそうな候補が複数ある場合は\`name\`の語感から最も近いものを選び、次点は\`optional_layers\`に残す(このリストに\`path\`階層は無いため、\`name\`だけで判断すること)。
+使えるカタログは下記の2件のみ。他のカタログを推測・自動発見しない。\`source_id\`/\`style_id\`は下記リストに実在するものだけを使う。**リストに無い場合、それらしいidを作らず「見つからない」と正直に言う**(捏造は最重要の禁止事項 — 過去に\`lcmfc2\`のつもりで存在しない\`lcmfc2_1\`を出力した例が観測されている)。
 
 ## やりとりの形: リンクを直接構築する
 
@@ -114,23 +94,36 @@ https://dwg7.github.io/spiccato/#q=catalog=<カタログURI>&type=<catalog_type>
 - \`catalog\`はURLエンコード不要(下記2件のURIをそのまま使う)。
 - \`type\`はカタログ1(layers-martin)を使う場合は省略可(既定\`layers_txt\`)。カタログ2(stars-optgeo)を使う場合は\`type=martin\`を必ず付ける。
 - \`req\`(必須レイヤー)・\`opt\`(任意レイヤー)はカンマ区切りのsource_id。いずれか一方は必須。
-- \`bbox\`は西,南,東,北の順の10進緯度経度。地名から座標へ解決するのはあなたの責務。
-- \`goal\`パラメータは**省略する**(省略すると解決後のレイヤー名から自動生成される)。\`name\`(地域名)も短い地名に留める。長い日本語の説明文をURLに含めると不必要に長くなり、伝送経路での破損リスクが増える。
+- \`bbox\`は西,南,東,北の順の10進緯度経度。地名から座標へ解決するのはあなたの責務(下記「地域・範囲の解決」参照)。
+- \`goal\`パラメータは省略してよい(省略すると解決後のレイヤー名から自動生成される)。書いてもよい。
 - \`required_styles\`/\`optional_styles\`(個々のレイヤーでなく完成した主題図そのもの)はこのリンク形式では表現できない。その場合は下記「stars-optgeo」節のYAML例をそのままMap Intentとして提示する(貼り付け先はspiccatoのフォーム)。
 
-## 背景地図は自動描画される
+これはSTAFF_PROMPT.mdの「正しいやりとりの形」(Map Intentをコピーして貼り付ける)とは異なる、spiccato固有の受け渡し方法である。spiccatoは共有の一次artifactとしてURLも扱う設計になっている(貼り付けと比べて手数が少なく、リンクを1回開くだけで再現できる)。
 
-bvmap背景地図・地形(hillshade/terrain)は常に自動描画される。\`req\`/\`opt\`に背景用のidを入れてはならない(意図せず不透明なラスタとして重なり、見た目が崩れる)。3D地形の表示切替はCartographer画面上のUI操作であり、Staffが指定する項目ではない。
+## Cartographer(spiccato)の現在の能力を踏まえること
+
+Map Intentを書く前に、spiccatoが「勝手にやってくれること」を知っておくこと。
+
+- **背景地図(bvmapグレースケール + Mapterhorn地形)**は常時自動描画される。\`req\`/\`opt\`に背景用のidを入れてはならない(意図せず不透明なラスタとして重なり、見た目が崩れる)。表示/非表示はCartographer画面上のチェックボックスで利用者が任意に切り替えられる。
+- **等高線**は主題レイヤーの直後・道路や注記より下に常に描画される。地形と警戒区域等の関係を見せたい場合は、Map Intentの\`relationships_to_highlight\`にその旨を書くことで意図を表現できる。
+- **3D地形表示**はCartographer画面上のUI操作(terrain control)で利用者が任意に切り替える。Staffが指定する項目ではない。
+- **\`optional_layers\`/\`optional_styles\`**は既定非表示で、画面上のチェックボックスで利用者が表示/非表示を切り替えられる。
+- **凡例**は、凡例画像を持つ表示中のレイヤーのみパネル内に表示される。凡例が無いレイヤーでは何も表示されない。
+- **「Copy Link」ボタン**でURL(現在の表示位置を含む)をそのままコピーできる。**「Copy Map Intent」ボタン**では、その時点の表示位置(\`render_hints\`)と、解決できなかったレイヤーがあれば\`cartographer_feedback\`(\`missing_layers\`/\`unrenderable_layers\`)を含むMap Intentテキストが返る。利用者がこれをあなたに渡してきた場合、前回解決できなかったレイヤーがあったことを意味するので、次の応答でその情報を踏まえること(別のsource_idを提案する、利用者に確認する等)。
 
 ## カタログ1: layers-martin(既定、\`catalog=${LAYERS_MARTIN_CATALOG_URL}\`)
 
-国土地理院ほかの日本の地理空間データ全般。以下は全source_id(サイズ・ノイズの都合で一部除外、${layersMartinCount}件)。除外内容: \`disasterhist_*\`(地域別・年代別に細分化された災害履歴図シリーズ)・教育用イラストの液状化シリーズ4件・年代別の過去災害イラスト系列・\`gsjgeomap*\`(5万分の1地質図幅、866件、サイズが大きいため)・\`ndvi_*\`(月次植生指数、105件、同)・ローカルidの災害対応速報画像で${DISASTER_SNAPSHOT_MIN_YEAR}年より前のもの(${DISASTER_SNAPSHOT_MIN_YEAR}年以降は収録)。\`id|name\`形式、id昇順:
+国土地理院ほかの日本の地理空間データ全般。以下は全source_id(意味的ノイズ(\`disasterhist_*\`等の地域別・年代別に細分化された災害史・教育用イラスト系列)を除く、${layersMartinCount}件)。\`id|name\`形式、id昇順:
 
 \`\`\`text
 ${layersMartinList}
 \`\`\`
 
-**カバレッジに注意**: 多くのレイヤーは全国を覆わない(地理的範囲の情報はこのリストに無い)。特に土地条件図(\`lcm25k\`/\`lcm25k_2012\`)は整備済み平野の一部のみ。対象地域で空になる場合、より広くカバーする代替(例: 治水地形分類図\`lcmfc2\`)を検討する。
+**既知の制約**:
+
+- **地理的カバレッジ**: 多くのレイヤーは全国を覆わない(このリストに\`bounds\`/\`path\`は含まれていない)。特に土地条件図(\`lcm25k\`/\`lcm25k_2012\`)は整備済み平野の一部のみで、対象地域によってはタイルが存在せず地図上に何も出ない。空になる場合、より広くカバーする代替(例: 治水地形分類図\`lcmfc2\`)を検討する。
+- **同名候補が複数ある場合**: このリストに\`path\`(カテゴリ階層)が無いため、\`name\`の語感だけで最も近いものを選ぶ(例: \`lcmfc2\`治水地形分類図/\`lcm25k_2012\`数値地図25000土地条件/\`terrainclassification1\`地形分類図、は似た名前だが別物)。安易に一つへ決め打ちせず、次点候補は\`optional_layers\`に残す。
+- **「現在のリスク」と「過去の事例」の混同**: 液状化・地域別災害史などの教育用イラスト系列は、このリストから既に除外済みなので、通常は混同が起きない。ただし、それでも「今のリスクマップが見当たらない」という状況(例: 一般的な液状化しやすさマップはこのカタログに存在しない)では、それらしいidを作らず正直に「見つからない」と伝えること。
 
 ## カタログ2: stars-optgeo(catalog=\`${STARS_OPTGEO_CATALOG_URL}\`、\`type=martin\`)
 
@@ -140,7 +133,11 @@ ${layersMartinList}
 ${starsOptgeoList}
 \`\`\`
 
-公開済みstyle_id: ${starsOptgeoStyleIds.join('、')}。「火山土地条件図/火山基本図が見たい」など**完成した地図そのもの**が求められている場合は、これらを\`style_id\`として使う(道南〜道央限定)。この場合は\`#q=\`ではなくMap IntentのYAMLをそのまま示す:
+使い分けの目安:
+
+- **ラスタ背景地図で用が足りる場合**: spiccatoの既定背景(bvmapグレースケール + Mapterhorn)のままでよい。stars-optgeoを追加する必要は無い。
+- **全国空中写真が必要な場合**: \`japan-seamless-aerial-z18\`(z18のみ)または\`seamlessphoto512\`(z1-17)を通常のsource_idとして使う。
+- **利用者が「北海道の火山土地条件図/火山基本図を見たい」など、完成した主題図そのものを求めている場合**: 公開済みstyle_id \`${starsOptgeoStyleIds.join('`・`')}\` を\`style_id\`として\`required_styles\`/\`optional_styles\`で参照する(道南〜道央限定)。GSI公式凡例に基づき色分け・記号化済みの完成品であり、通常はこちらを優先する。この場合は\`#q=\`ではなくMap IntentのYAMLをそのまま示す:
 
 \`\`\`yaml
 spec_version: "map-intent/v2"
@@ -158,13 +155,25 @@ provenance: {generated_by: "gennai", generated_at: "<ISO8601>", intent_id: "<uui
 
 \`area.bbox\`を省略すると全国表示(ズーム5相当)になってしまう。\`required_styles\`のみのMap Intentでも\`bbox\`は必ず埋めること。
 
+## 地域・範囲の解決はあなたの責務
+
+Map Intentの\`area\`は\`name\`と\`bbox\`(\`[lon_w, lat_s, lon_e, lat_n]\`)を持つ。市区町村名をそのまま運ばず、座標へ解決してから\`area.bbox\`/URLの\`bbox\`パラメータに格納すること。多くのレイヤーが地理的範囲の情報を持たないため、対象範囲の絞り込みは名前・一般常識からあなたが行い、Cartographer側にカバレッジ判定を委ねない。
+
 ## 例
+
+利用者「土砂災害警戒区域を教えて」→
+
+\`\`\`
+https://dwg7.github.io/spiccato/#q=catalog=${LAYERS_MARTIN_CATALOG_URL}&req=05_dosekiryukeikaikuiki,05_jisuberikeikaikuiki,05_kyukeishakeikaikuiki&name=<対象地域>
+\`\`\`
 
 利用者「石狩川の治水について考えたい」→
 
 \`\`\`
 https://dwg7.github.io/spiccato/#q=catalog=${LAYERS_MARTIN_CATALOG_URL}&req=lcmfc2,01_flood_l2_shinsuishin_data&bbox=141.25,43.0,141.85,43.4&name=石狩川下流域
 \`\`\`
+
+利用者「北海道の火山土地条件図を見たい」→ 上記「カタログ2」節のYAML例(\`required_styles: [vlcm]\`)をそのまま提示する(#q=では表現できないため)。
 `;
 }
 

@@ -48,12 +48,14 @@
 ### 完了(参考)
 
 - **背景地図(bvmap)の表示/非表示トグル**(D9、2026-08-03実装) — パネルに「背景地図(bvmap)を表示」チェックボックス(既定ON)を追加。既存の`layerIdsBySourceId`/`[data-layer-toggle]`汎用ハンドラ(`src/render.ts`)をそのまま流用でき、新規JSロジックは不要だった(HTMLテンプレートへの1ブロック追加のみ)。可視状態はURLに永続化しない(既存の主題レイヤートグルと同じ挙動)。3D地形は従来通り`TerrainControl`(右上の山アイコン)でON/OFF。
-- **源内スタイル**(D10〜D12、2026-08-03実装、最終形はD12) — `GENNAI_PROMPT.md`は紆余曲折を経て以下の形に確定した:
+- **源内スタイル**(D10〜D15、2026-08-06実装、最終形はD15) — `GENNAI_PROMPT.md`は紆余曲折を経て以下の形に確定した:
   1. 最初`hfu/layers-martin`に、`STAFF_PROMPT.md`を抜粋・圧縮した精選版(3,966字)として置いた(D10、同リポジトリD28)。
   2. フォーム画面から発見できなかったため`scripts/fetch-gennai-prompt.mjs`でUIに配線した(D11)。
   3. ユーザー判断により方針転換: (a)`hfu/layers-martin`のD23判断(全カタログ埋め込みは保守負荷過大)を今回は踏み越え、カタログを既知のノイズ系統を除き全件埋め込むべき、(b)内容がspiccato固有のインタフェースに依存するため、`hfu/layers-martin`ではなくこのリポジトリに置くべき、との指摘を受け、D12で全面作り直し。`hfu/layers-martin`側のD28はSupersededにした。
-  4. **D12でも実際には長すぎた** — ユーザーが手元のChatGPTに読み込ませたところ失敗(66,860字)。追加削減をD13で実施: `gsjgeomap*`(866件、地質図幅)・`ndvi_*`(105件、月次植生指数)をサイズ都合で除外、災害対応速報画像系(8桁日付プレフィックス)は2020年より前を除外(2020年以降・熊本地震2026・能登半島地震2024は維持)。
-  - **現状**(D13): `scripts/build-gennai-prompt.mjs`が`prebuild`のたびにlayers-martin・stars-optgeoの実カタログをfetchし、上記の除外を適用した上で**17,870字**(layers-martin 501件+stars-optgeo 7件)を`GENNAI_PROMPT.md`(リポジトリルート)に埋め込む。`src/main.ts`は`../GENNAI_PROMPT.md?raw`を直接import。フォーム画面のdisclosure UI自体はD11のまま。実際に源内やChatGPTで読み込めるかは要再確認 — まだ大きい場合は`DISASTER_SNAPSHOT_MIN_YEAR`引き上げ等でさらに削減できる。
+  4. D12でも実際には長すぎるとユーザーが判断(ChatGPTで読み込み失敗、66,860字) → D13で`gsjgeomap*`/`ndvi_*`/2020年より前の災害対応速報画像を追加除外(17,870字まで縮小)。
+  5. **D13は撤回した(D15)** — MS Copilotでの再検証により「文字数の多さは問題ではない」との所見。また、GENNAI_PROMPT.mdとSTAFF_PROMPT.mdの内容差分分析で「Cartographer能力」「既知の欠落」「意味解決の指針」がほぼ丸ごと欠落していたことが判明し、正確さ・互換性優先の方針に転換。D13の3種除外をすべて撤回(D12相当の1,685件に復元)、プロンプト本文を拡充(Cartographer能力節・既知の制約節・例3件に増強)。
+  - **現状**(D15): `scripts/build-gennai-prompt.mjs`が`prebuild`のたびにlayers-martin・stars-optgeoの実カタログをfetchし、意味的ノイズ(`disasterhist_*`等)のみ除外した上で**約69,000字**(layers-martin 1,685件+stars-optgeo 7件)を`GENNAI_PROMPT.md`(リポジトリルート)に埋め込む。実際に源内やChatGPTで読み込めるかは依然ユーザー確認待ち。
+  - あわせて`hfu/layers-martin`のSTAFF_PROMPT.md自体も更新した(同リポジトリD29) — 「正しいやりとりの形」がspiccatoの設計(URLが一次artifact)と矛盾していた箇所を解消し、spiccato向け`#q=`/`#m=`構築手順を追記。
   - spiccatoサイトに埋め込まれた3件のサンプル質問(熊本地震オルソ画像・石狩川治水・北海道火山土地条件図)で実機検証済み(D11時点、内容は変わってもリンク構築ロジックは同じなので引き続き妥当)。
 - **MCPスタイル stdio・Workers版**(D10、2026-08-03実装) — 上記参照。
 
