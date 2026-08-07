@@ -345,3 +345,30 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 **検証**: 再生成後、本番相当ビルド(`npm run build && npm run preview`)で実機確認。`gsjgeomap`/`ndvi_`/2020年より前の災害対応速報画像が復元されていること、コンソールエラー無しであることを確認した。
 
 **Consequences**: `docs/index.html`のサイズがD13時点から再度増加した(カタログ埋め込み量がD12相当に戻ったため)。実際の源内・ChatGPT等での読み込み可否は依然ユーザー確認待ち — 今回の分析により「サイズではなく内容の欠落がエラーの主因だったのでは」という仮説に基づく方針転換であり、確定した結論ではない。今後、実際のエラー事例が得られた場合、サイズ・内容いずれが真因かを改めて切り分ける必要がある。
+
+## D16: オープンウェブスタイル(Style 3)の最小限プロトタイプ — 決定的検索+極小LLMでの意図解釈のみを検証する
+
+**Status**: Accepted(プロトタイプとして実装・実機検証済み。**結論: 意図解釈ステップ(極小LLMでのキーワード抽出)が現状の構成では信頼性不足**、下記「実機検証」参照)
+
+**Context**: D10でMCPスタイル(stdio/Workers)・源内スタイルが完成し、計画ファイル(`/Users/hfu/.claude/plans/scalable-snacking-spring.md`)が定めた実装順序(stdio→Workers→源内→オープンウェブ)の最終フェーズに着手した。オープンウェブスタイルは「ブラウザ内で完結する最小LLMがStaffの役割を演じる」構想だが、Staff本来の仕事(自然文→約1,865件のカタログから正しい`source_id`を検索→捏造せず`#q=`リンク構築)は、フルサイズのクラウドLLMでも`source_id`捏造が実際に観測されている難しいタスクであり、ブラウザ内小型モデルに丸投げするのは筋が悪い。計画ファイルはこれを「決定的検索(`mcp/src/catalog.ts`のブラウザ移植)+極小LLMでの意図解釈(検索キーワード抽出のみ)+決定的ジオコーディング+人間が候補を選ぶUI」の4要素に分解し、「この分解が成立するかどうかの最終判断はまだ保留する」としていた。今回はこのうち最初の2要素(決定的検索+LLMでの意図解釈)だけを検証する最小限プロトタイプに着手した。地名→座標解決・候補選択UI・`#q=`リンク構築は今回のスコープに含めない。
+
+**Decision**:
+
+- **配置**: 新規`openweb/`ディレクトリ、メインのフォーム画面(1ファイルにインライン化された`index.html`)とは別のページ(`docs/openweb/index.html`)として独立させた。理由: `vite-plugin-singlefile`は複数HTMLエントリポイントを公式サポートしていない(同プラグインのREADME「Issues opened requesting multiple entry points will be closed as wontfix」)。加えて、大きめのLLMライブラリの読み込みをメインページの既存利用者に一切影響させないためにも分離が妥当と判断した。ビルドは`vite.openweb.config.ts`(新設、`viteSingleFile()`を使わない通常のマルチファイル出力)を追加し、`package.json`の`build`スクリプトをメインビルドの後に続けて実行する形にした(`vite build && vite build --config vite.openweb.config.ts`)。メインビルドの`emptyOutDir`が`docs/`全体を対象にする一方、openwebビルドの`emptyOutDir`は`docs/openweb/`に限定されるため、この実行順序(メイン→openweb)を守る必要がある。
+- **LLM実行ライブラリ**: `@huggingface/transformers`(transformers.js、ONNX Runtime Web)を採用。WebLLM(WebGPU必須、Llama-3-8B/Qwen2.5-7B級、初回2〜5GB超)ではなく、極小モデルに絞ることでtransformers.jsが有利、という計画ファイルの分析を踏襲した。
+- **モデル**: `onnx-community/Qwen2.5-0.5B-Instruct`、量子化形式`q4`(実測約786MB)。重みはリポジトリにコミットせず、実行時にHugging Face HubのCDNから取得する(`openweb/llm.ts`)。当初はより小さい`q4f16`(実測約480MB)を試したが、`@huggingface/transformers` 4.2.0が使うonnxruntime-webでセッション生成時に`GetIndexFromName ... SimplifiedLayerNormFusion`エラーで失敗した(fp16融合最適化に特有のグラフバグと見られる、このモジュール側では回避不可能と判断)。`q4`(int4のみ、fp16融合なし)は問題なくロード・推論できた。
+- **意図解釈タスクの限定**: LLMには「質問から検索キーワードを1つだけ抜き出す」という狭いタスクのみを与え、`source_id`やMap Intent全体を一切生成させない(`openweb/llm.ts`の`extractKeyword`)。出力はJSON構造化ではなく素のテキスト1行として扱い、末尾の句読点・引用符を軽く除去するだけの寛容なパース(`cleanKeyword`)にとどめた — 0.5B級モデルの構造化出力の信頼性は未検証であり、JSON崩れで例外を投げるより、多少の表記ゆれを飲み込む方が壊れにくいと判断した。
+- **決定的検索レイヤーの再利用**: `mcp/src/catalog.ts`の`searchCatalog`/`KNOWN_CATALOGS`をそのまま相対importで再利用した(`fetch`のみに依存する環境非依存の純粋関数、D10で確立した共有パターン — SPA/`mcp`(stdio)/`worker`に続く4つ目の利用箇所)。新規に検索ロジックは書いていない。`openweb/main.ts`は抽出したキーワードで両カタログ(layers-martin・stars-optgeo)を検索し、結果を結合して読み取り専用の候補一覧として表示するだけの一直線フロー。
+- **メインページからの導線**: `src/render.ts`の冒頭カードに"Experimental: try a browser-only AI..."という1行のリンクを追加した(D11で`GENNAI_PROMPT.md`をフォーム画面から発見できるようにした精神を踏襲、ただしプロトタイプ段階のため控えめな扱いとした)。
+
+**実機検証**: 本番相当ビルド(`npm run build && npm run preview -- --port 4321 --strictPort`)で`/openweb/`を開き、3件の質問を試した:
+
+1. 「令和8年熊本地震の被害状況が知りたい」(ゼロショット、few-shot例追加前) → 抽出結果が「地震による被害状況についての情報は、以下の検索キー…」という説明文になり、`max_new_tokens`(16)で途中切断、`searchCatalog`で0件ヒット。**モデルが「キーワードだけを出力せよ」という指示に従わず、完全な説明文を書き始めた**。
+2. これを受け、system promptにfew-shot例3組(質問→期待キーワードのuser/assistantペア)を追加(`openweb/llm.ts`の`FEW_SHOT_EXAMPLES`)して再検証。「能登半島地震の空中写真が見たい」→「能登半島地震の空中写真」、「令和8年熊本地震の正射画像を見たい」→「令和8年熊本地震の正射画像」と、指示文の一部をそのまま切り出す形にはなった(暴走はしなくなった)ものの、いずれも実カタログのname/id/pathに存在しない長いフレーズのため0件ヒット。
+3. few-shot例と**文字列として完全一致**する質問(「北海道の火山土地条件図を見たい」、3つのfew-shot例の1つそのもの)でも、出力は「北海道の火山 園団図」という文字化けした無意味な文字列になった。
+
+3件中3件とも実用的な検索結果に至らなかった。一方、コンソールエラーは0件で、ダウンロード→ONNXセッション生成→推論→`searchCatalog`呼び出しという**機構自体は最後まで正常に動作した**(D5/D8の教訓通り、目視確認ではなく`document.getElementById('status').textContent`をコンソールから直接読む方法で確認)。
+
+**結論**: 決定的検索レイヤー(`mcp/src/catalog.ts`の移植)・ビルド分離・LLM実行基盤(transformers.js)という「配管」部分は問題なく機能する一方、**Qwen2.5-0.5B-Instruct(q4量子化)によるキーワード抽出は、few-shot例を与えても実用的な精度に達しなかった**。計画ファイルが警告していた「フルサイズのクラウドLLMでも`source_id`捏造が観測される」水準の困難さが、「検索キーワードを1語に絞る」というさらに狭いタスクに限定してもなお、0.5B級モデルの手に余ることを示す結果となった。計画ファイル自身の「この分解が成立しない場合はこの時点でStyle 3を諦める判断ができる」という条件に該当すると考えられるが、次の代替案(より大きいモデル、`do_sample`調整、構造化出力の強制、プロンプトのさらなる作り込み等)を試す前に、この結果自体をユーザーに提示して方針判断を仰ぐのが適切と考え、追加のチューニングはここで止めた。
+
+**Consequences**: `openweb/`(`index.html`/`main.ts`/`llm.ts`)・`vite.openweb.config.ts`を追加。ルート`package.json`に`@huggingface/transformers`を追加、`build`スクリプトが2回の`vite build`を実行するようになりビルド時間が伸びた。`tsconfig.json`の`include`に`openweb`を追加(`mcp/src/catalog.ts`はimport経由で自動的に型検査対象に含まれる)。既存の`src/main.ts`・メインバンドルには変更なし(コード的な影響はD16のメインページ側の1行リンク追加のみ)。地名→座標解決・候補選択UI・`#q=`リンク構築の実装は、上記の結果を踏まえた方針判断(モデル変更で再挑戦するか、Style 3自体を諦めるか)が出るまで着手しない。

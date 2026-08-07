@@ -220,10 +220,10 @@ export function renderFormView(
     <div class="card">
       <h1>Spiccato</h1>
       <p>Open a link, see the map. Usually you won't see this page at all -- your AI hands you a URL, you click it, the map is already there. This form is the fallback for setting things up, or for pasting a Map Intent by hand.</p>
+      <p style="font-size:0.82rem;color:#555;">Experimental: <a href="./openweb/">try a browser-only AI</a> that searches the catalog for you, no external AI needed (early prototype).</p>
     </div>
     <div class="card">
       <div class="step-header">
-        <button id="copy-staff-prompt" type="button" class="dads-button" data-type="outline" data-size="sm">Copy</button>
         <h2 class="card-step">1. Prompt your AI</h2>
       </div>
       <p>Copy this prompt and give it to your AI (for example, Claude or ChatGPT). It teaches your AI to write a Map Intent.</p>
@@ -238,6 +238,7 @@ export function renderFormView(
         </summary>
         <div class="dads-disclosure__content">
           <p style="font-size:0.82rem;color:#555;">Prompt source: <a href="https://github.com/hfu/layers-martin/blob/main/STAFF_PROMPT.md" target="_blank" rel="noreferrer">hfu/layers-martin STAFF_PROMPT.md</a></p>
+          <p><button id="copy-staff-prompt" type="button" class="dads-button" data-type="outline" data-size="sm">Copy</button></p>
           <pre>${staffPrompt}</pre>
         </div>
       </details>
