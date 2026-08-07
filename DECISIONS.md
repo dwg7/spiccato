@@ -380,3 +380,28 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 計画ファイルの「この分解が成立しない場合はこの時点でStyle 3を諦める判断ができる」という条件を踏まえると、Style 3を続けるなら「LLMの精度を上げる」以上に「検索レイヤーをキーワード完全一致ではなく緩やかなマッチング(トークン分割・同義語・ローマ字変換等)に強化する」ことが優先度の高い次の一手になる、というのが今回得られた知見。ここでいったんユーザーに結果を提示し、方針判断を仰ぐ。
 
 **Consequences**: `openweb/`(`index.html`/`main.ts`/`llm.ts`)・`vite.openweb.config.ts`を追加。ルート`package.json`に`@huggingface/transformers`を追加、`build`スクリプトが2回の`vite build`を実行するようになりビルド時間が伸びた。`tsconfig.json`の`include`に`openweb`を追加(`mcp/src/catalog.ts`はimport経由で自動的に型検査対象に含まれる)。既存の`src/main.ts`・メインバンドルには変更なし(コード的な影響はD16のメインページ側の1行リンク追加のみ)。地名→座標解決・候補選択UI・`#q=`リンク構築の実装は、上記の結果を踏まえた方針判断(検索レイヤーの改善に取り組むか、より大きいモデルで再挑戦するか、Style 3自体を諦めるか)が出るまで着手しない。
+
+**2026-08-07追記(方針判断・当面停止)**: ユーザー判断により、Style 3の深掘りは**当面停止**する。上記2.の検索レイヤーのギャップへの対応方向としては「カタログの各エントリに日本語`description`を追加する」が有力と位置づけたが、実装はしない(別リポジトリ`hfu/layers-martin`のスキーマ変更を要する独立した作業であり、当面のセッションの主眼(Issue #1/#2対応、D17参照)とは切り離す)。
+
+技術的な実現可能性のみ記録しておく(調査済み、未実装): `hfu/layers-martin`の`build_catalog.rb`は個々のTileJSON(`catalog/{id}`エンドポイント)には既に`description`(GSIの`html`フィールド由来、`build_tilejson`メソッド、524〜545行目付近)を含めているが、集約カタログ`catalog.json`の`tiles[id]`エントリ(`build_catalog`メソッド、638〜645行目付近)は`name`/`content_type`のみで`description`を含まない。`description`の元データは同じビルドプロセス内で既に計算済みのため、追加の外部fetchは不要(`build_catalog`に1行足すだけの見込み)。ただし、GSIの`html`はリンクや長めの説明文を含むことがあり、1,685件分をGENNAI_PROMPT.mdに埋め込んだ場合のプロンプトサイズ増加(D13で一度サイズを理由に縮小し、D15で撤回した経緯があるだけに)は着手時に要検討。
+
+## D17: Issue #1・#2(テストレポート)を踏まえたGENNAI_PROMPT.md/STAFF_PROMPT.mdの改善
+
+**Status**: Accepted
+
+**Context**: HANDOVER.mdが最優先事項として挙げていた「源内・ChatGPT等でMap Intentのエラーが多発している件の具体例待ち」に対し、ユーザーが2件のGitHub Issueを作成した。
+
+- [Issue #1](https://github.com/dwg7/spiccato/issues/1)「テストレポート：M365 Copilot」— M365 CopilotにSTAFF_PROMPT.md/GENNAI_PROMPT.mdを渡し、「石狩川下流域で洪水と低地地形の関係を見たい」という問いへの応答を評価させたレポート。GENNAI_PROMPT.mdの設計(捏造防止・URLを一次artifactにする方針・Cartographer能力の事前提示・layers-martin/stars-optgeoの役割分担)を高く評価しつつ、6点の具体的な改善提案があった。
+- [Issue #2](https://github.com/dwg7/spiccato/issues/2)「テストレポート：GENNAI(Sonnet)」— Claude SonnetにGENNAI_PROMPT.mdを渡し、4種類の問い(石狩川治水・北海道駒ヶ岳火山防災・「札幌市をみたい」という曖昧な問い・令和8年熊本地震)へのロールプレイ応答を記録したレポート。
+
+**事前検証**: 両Issueに登場する全source_id/style_id(計16件)を実カタログ(`https://hfu.github.io/layers-martin/catalog.json`・`https://stars.optgeo.org/catalog`)と突き合わせて確認したところ、**捏造は1件も無かった**(D14の寛容化・D15の内容拡充が効いている裏付け)。特にIssue #2の熊本地震の例では、カタログに実在する3件(`20260729kumamoto_kumamoto3_0731_0801do`・`20260729kumamoto_yatsushiro_0729do`・`20260729kumamoto_yatsushiro_0729do_sokuho`)のみを使い、熊本市街地・益城・阿蘇方面の画像は「現時点では見つかりません。それらしいidを作ることはしません」と正直に断っていた — 捏造防止の理念が実際に機能している好例として記録しておく。このため、対応の性質は「バグ修正」ではなく「Issue #1が指摘した改善提案を両プロンプトに反映する」作業になった。
+
+**Decision**: Issue #1の提案のうち、優先順位が明示されていた4点(bbox関連2点・選定手順・日本語エンコーディング/generated_at)を、`GENNAI_PROMPT.md`(`scripts/build-gennai-prompt.mjs`)と`STAFF_PROMPT.md`(`hfu/layers-martin`、D15の内容対応方針)の両方に反映した。「失敗を避けるための選定手順」という独立節を新設する提案もあったが、両プロンプトに既にある同趣旨の記述(「同名候補が複数ある場合はoptionalに残す」等)をチェックリスト風に強化するに留めた(新節を追加すると、プロンプトの肥大化・既存節との内容重複を招くと判断)。
+
+1. **bboxの例への追加**: GENNAI_PROMPT.mdの「土砂災害警戒区域」の例が`bbox`を含んでおらず、「地域・範囲の解決はあなたの責務」という記述と矛盾していた。2つ目の例(石狩川)と同じ形に揃えた。
+2. **bbox捏造防止の明記**: 「地名から十分な確信度でbboxを解決できない場合、細かい推測は避け、より広い既知の範囲に広げるか、範囲を特定できない旨を伝える」という一文を、GENNAI_PROMPT.mdの「地域・範囲の解決はあなたの責務」節、STAFF_PROMPT.mdの「地域・範囲の解決は Staff の責務」節の両方に追加した。source_idの捏造と同列のリスクとして明記した。STAFF_PROMPT.md側の既存の動作確認例(`bbox: null`)は既にこの原則に沿っていたため、例自体の修正は不要だった。
+3. **選定手順の強化**: GENNAI_PROMPT.mdの「同名候補が複数ある場合」の記述、STAFF_PROMPT.mdの対応する記述を、(1)完全一致・強い意味一致を優先、(2)複数候補があれば主候補をreq/required・次点をopt/optionalに、(3)対応する候補が無ければ「見つからない」と言う、という3段の手順として書き直した。両ファイルで表現を揃えた。
+4. **`name`パラメータの日本語エンコーディング・リンク提示時の一言説明**: GENNAI_PROMPT.mdに「`name`は可能ならURLエンコード、確実でなければ日本語のままでよい」「リンクには何を表示するか一言添える」を追加。STAFF_PROMPT.mdには`name`エンコーディングの注記のみ追加した(リンク提示時の説明については、STAFF_PROMPT.mdは既にD29で「必ず`[説明文](URL)`形式のMarkdownハイパーリンクで提示すること」を規定済みだったため、重複を避けた)。
+5. **`generated_at`の扱い**: 「現在日時を確信できない場合は省略してよい」という注記を、GENNAI_PROMPT.mdの`required_styles`使用時のYAML例、STAFF_PROMPT.mdの動作確認例3(`required_styles`、D39)のYAML例、それぞれの直後に追加した。
+
+**Consequences**: `scripts/build-gennai-prompt.mjs`の`buildPrompt()`テンプレート文字列を変更(生成される`GENNAI_PROMPT.md`は次回`npm run build`のprebuildで反映される)。`hfu/layers-martin`の`STAFF_PROMPT.md`も対応する箇所を変更、同リポジトリのDECISIONS.mdにD30として記録した。Issue #2は検証の結果、追加のプロンプト修正が不要だったため変更していない(捏造無し・曖昧な問いへの適切なフォローアップ提案・カバレッジ外レイヤーへの正直な回答、いずれも既に正しく機能していることを確認しただけ)。オープンウェブスタイル(D16)は、この作業とは独立した理由で当面停止のまま(上記追記参照)。

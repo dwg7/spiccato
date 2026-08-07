@@ -8,13 +8,13 @@
 
 **現在地**: https://dwg7.github.io/spiccato/ で公開中、動作確認済み。
 
-## 現在の状態(2026-08-07時点、オープンウェブスタイル最小限プロトタイプ(D16)実装・検証後)
+## 現在の状態(2026-08-07時点、Issue #1・#2対応(D17)完了後)
 
-**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。**実装順序はstdio → Workers → 源内 → (完成後に)オープンウェブの分解を深める**、と明確化済み。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D10〜D15)は実装完了。**オープンウェブスタイルは最小限プロトタイプ(決定的検索+極小LLMでのキーワード抽出のみ、D16)を実装・実機検証した。プロンプト・few-shot例・デコード設定を4段階に渡り調整した結果、「暴走せず短いキーワードを返す」ところまでは到達したが、それでも実用的な検索結果は得られなかった。原因を切り分けたところ、LLMの精度不足だけでなく、決定的検索レイヤー自体の構造的なギャップ(カタログの`name`が日本語の災害名・年号を含まないエントリが実在する)も同時に発覚した** — 詳細は下記「未着手・フォローアップ」参照。
+**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D10〜D15、D17)は実装完了。**オープンウェブスタイルは最小限プロトタイプ(決定的検索+極小LLMでのキーワード抽出のみ、D16)まで実装・実機検証したが、LLMの精度不足に加え決定的検索レイヤー自体の構造的ギャップ(カタログの`name`が日本語の災害名・年号を含まないエントリが実在する)が発覚し、**ユーザー判断により当面停止**(D16 2026-08-07追記)。対応方向(カタログへの日本語`description`追加)は技術的な実現可能性のみ記録し、実装は保留中。
 
-**前回セッションの横道(D14/D15)は依然クローズしていない**: ユーザーが源内・ChatGPTでMap Intentを試したところエラーが多発していると報告があり、(a)`parseMapIntent`が儀礼的だが未使用のフィールドで弾いていた問題をCartographer側の寛容化で解決(D14)、(b)GENNAI_PROMPT.mdのSTAFF_PROMPT.mdとの内容差分分析→サイズ削減(D13)の撤回・内容拡充(D15)、という対応をしたが、**まだユーザーから具体的なエラー事例(質問内容・返ってきたYAML・エラーメッセージ)は届いていない** — 依然として最優先の確認事項。
+**「Map Intentエラー実例待ち」(前回セッションの最優先事項)はクローズした**: ユーザーが[Issue #1](https://github.com/dwg7/spiccato/issues/1)(M365 Copilotによるプロンプト評価レポート)・[Issue #2](https://github.com/dwg7/spiccato/issues/2)(GENNAI/Sonnetによる4件のロールプレイテスト)を作成。**想定していた「クラッシュ系エラー」ではなく、プロンプト設計への建設的レビューだった**。両Issueに登場する全source_id/style_id(計16件)を実カタログと突き合わせて検証し、捏造は1件も無かったことを確認(D14/D15の効果の裏付け)。Issue #1が指摘した4点の改善提案(bboxの例の不整合・bbox捏造防止の明記・選定手順の強化・`name`エンコーディング/`generated_at`の扱い)を、`GENNAI_PROMPT.md`(`scripts/build-gennai-prompt.mjs`)と`hfu/layers-martin`の`STAFF_PROMPT.md`の両方に反映した(D17、layers-martin側はD30)。Issue #2はテストレポートとして問題なしと確認、追加修正はしていない。
 
-**このセッションでの追加作業**: (1) `src/render.ts`のプロンプトコピーボタンの非対称性を解消(STAFF_PROMPT.md用ボタンをGENNAI_PROMPT.md用と対称な位置に移動、コード変更のみ・DECISIONS.mdに独立項目化はしていない)。(2) オープンウェブスタイルの最小限プロトタイプを`openweb/`に実装、実機検証してD16として記録。
+**このセッションでの追加作業**: (1) `src/render.ts`のプロンプトコピーボタンの非対称性を解消。(2) オープンウェブスタイルの最小限プロトタイプを`openweb/`に実装・実機検証してD16として記録、ユーザー判断で当面停止。(3) Issue #1・#2への対応(D17・layers-martin D30)。
 
 ### 実装済み・動作確認済み
 
@@ -48,8 +48,8 @@
 
 ### 未着手・フォローアップ
 
-1. **Map Intent検証エラーの実例待ち(最優先)** — ユーザーが源内/ChatGPT等で実際にエラーを踏んでいる。これまでに一次対応を2つ実施した(D14: 儀礼的だが未使用のフィールドをCartographer側で寛容化。D15: GENNAI_PROMPT.mdのサイズ削減撤回・STAFF_PROMPT.mdとの内容差分を埋める拡充)。**いずれも推測に基づく対応であり、実際のエラー事例(質問内容・返ってきたYAML・エラーメッセージ)はまだ届いていない**。届いたら、上記2つの対応で解消しているか、それとも別の原因(本当の不具合)が残っているかを確認すること
-2. **オープンウェブスタイル(D16)の方針判断待ち** — 最小限プロトタイプ(`openweb/`、決定的検索+極小LLMでのキーワード抽出)を実装・実機検証した。プロンプト・few-shot例・デコード設定を4段階調整し、最終的にQwen2.5-0.5B-Instruct(q4量子化)は「暴走せず短く一貫したキーワードを返す」ところまで改善できた(例:「令和8年熊本地震の被害状況が知りたい」→「令和8年熊本地震」)。**それでも検索結果は0件だった。原因を実カタログで直接確認したところ、フラッグシップ例のsource_id `20260729kumamoto_yatsushiro_0729do_sokuho`の`name`フィールドは「八代地区(7/29撮影)」であり、「熊本地震」「令和8年」という日本語文字列を一切含んでいなかった**(ローマ字の`kumamoto`は`id`に含まれるが、日本語表記はカタログのどこにも無い)。つまり**問題はLLMの精度不足だけでなく、`mcp/src/catalog.ts`の`searchCatalog`(単純な部分文字列一致)自体が、この種のカタログ命名慣行に対して原理的に対応できないという構造的なギャップでもあった**。MCPスタイル・源内スタイルがこの問題を踏まないのは、Staffに実カタログ全件(source_idそのもの)を読ませているため、自然文キーワードでの検索に頼っていないから。次にどうするか、ユーザー判断が必要: (a)`searchCatalog`側の緩やかなマッチング(ローマ字変換・トークン分割等)を強化する、(b)より大きいモデルで再挑戦する、(c)ここでStyle 3の深掘りを打ち切る。詳細はDECISIONS.md D16の「実機検証」節参照(repetition_penalty追加による悪化事例も記録済み、デコード設定をいじる際は要参照)
+1. **Issue #1・#2の後片付け** — D17・layers-martin D30で内容面の対応は完了した。まだ`git push`していない(spiccato・layers-martin両方)。また、対応内容をIssue #1・#2にコメントするか、Issueをクローズするかはユーザーに確認してから行う(外部可視のアクションのため、このセッションでは実施していない)
+2. **オープンウェブスタイル(D16)は当面停止** — ユーザー判断により深掘りを止めた(2026-08-07)。最小限プロトタイプ(`openweb/`)の実機検証で、LLMの精度不足に加えて`mcp/src/catalog.ts`の`searchCatalog`(単純な部分文字列一致)自体の構造的なギャップ(カタログの`name`が日本語の災害名・年号を含まないエントリが実在する)が判明した。対応方向としては「カタログの各エントリに日本語`description`を追加する」が有力だが、`hfu/layers-martin`のスキーマ変更(`build_catalog.rb`)を要するため未着手。再開する場合はDECISIONS.md D16の2026-08-07追記を参照
 3. **`build-docs.yml`がpushで起動しない件** — 上記「教訓」参照。ユーザーに組織`dwg7`のActions設定(`https://github.com/dwg7/spiccato/settings/actions`)確認を依頼済み、回答待ち。billing枯渇ではないことは確認済み(2026-08-06、月2,000分中0分使用)。**2026-08-07時点で再確認したところ、依然として直近の複数pushで`push`トリガーの起動が0件**(2026-08-03 13:31以降、`schedule`/`workflow_dispatch`のみ成功) — まだ解消していない
 4. **`#m=`の非推奨化(obsolete化)** — D7の条件1(`#q=`のrender_hints/cartographer_feedback拡張)はD8で実装済み。残りの条件(実用上十分な期間の安定稼働確認 → STAFF_PROMPT案内の更新 → 実際のコード削除の判断)はまだ。急ぐ必要は無い(D7参照)。**`hfu/layers-martin`のSTAFF_PROMPT.md更新自体はD29で完了済み**(下記「完了」参照) — 残るのは「実際に`#m=`のコードを削除するかどうか」という、より重い判断のみ
 5. **`hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案** — 未適用(別リポジトリのため提案のみ)。保存場所(セッション間で引き継がれない一時ディレクトリのため、消えていたら再作成が必要):
@@ -128,18 +128,17 @@ npm run preview -- --port 4321 --strictPort   # ローカル確認用(docs/openw
 
 ---
 
-`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` を全文読み、次に `DECISIONS.md` のD1・D2・D6〜D16(特にD16が直近の変更)、計画ファイル `/Users/hfu/.claude/plans/scalable-snacking-spring.md`(Staffの複数スタイル導入計画、残っていれば)を読んで状況を把握してください。関連する `hfu/layers-martin` リポジトリ(`/Users/hfu/layers-martin`、ローカルにクローン済み)のD28・D29も、STAFF_PROMPT.md/GENNAI_PROMPT.mdの経緯を理解する上で参照してください。
+`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` を全文読み、次に `DECISIONS.md` のD1・D2・D6〜D17(特にD16・D17が直近の変更)、計画ファイル `/Users/hfu/.claude/plans/scalable-snacking-spring.md`(Staffの複数スタイル導入計画、残っていれば)を読んで状況を把握してください。関連する `hfu/layers-martin` リポジトリ(`/Users/hfu/layers-martin`、ローカルにクローン済み)のD28〜D30も、STAFF_PROMPT.md/GENNAI_PROMPT.mdの経緯を理解する上で参照してください。
 
-**最優先事項1**: ユーザーが源内・ChatGPT等でMap Intentを試して「結構エラーが出ている」と報告している件。D14(Cartographer側のフィールド寛容化)・D15(GENNAI_PROMPT.mdの内容拡充)という2つの一次対応を既に実施済みだが、**まだ具体的なエラー事例(質問内容・返ってきたYAML・エラーメッセージ)を受け取れていない**。ユーザーから事例が来たら、まずそれを読み、上記2対応で解消しているかを確認すること。存在しない`source_id`の捏造、`#q=`のURLエンコード誤り、YAML構文エラーなど、儀礼フィールド以外の本当の不具合が別に無いか注意深く見ること。
-
-**最優先事項2**: オープンウェブスタイル(D16)の方針判断待ち。最小限プロトタイプ(`openweb/`)を実機検証し、プロンプト・few-shot例・デコード設定を4段階調整した結果、LLM(Qwen2.5-0.5B-Instruct、q4量子化)は「暴走せず短く一貫したキーワードを返す」ところまで改善できたが、それでも検索は0件だった。原因を実カタログで直接確認したところ、**問題はLLMの精度だけでなく、`mcp/src/catalog.ts`の`searchCatalog`(単純な部分文字列一致)自体が、日本語の災害名を含まないカタログエントリ(`name`が撮影地区名・日付のみ、災害名はローマ字`id`にしか無い)に対応できないという構造的なギャップだった**。ユーザーからの指示(検索レイヤーの緩和/より大きいモデルで再挑戦/ここで打ち切り)を待つこと。詳細はDECISIONS.md D16。
+**最優先事項**: Issue #1・#2への対応(D17・layers-martin D30)の後片付け。spiccato・layers-martin両方でコミット済みだが**まだ`git push`していない**。プッシュしてよいか、また対応内容をIssue #1・#2にコメントするかクローズするか、ユーザーに確認すること(外部可視のアクションのため未実施)。
 
 次点のフォローアップ候補(優先順は状況次第で判断してよい):
-1. **`build-docs.yml`が`push`で起動しない件** — 独自CI(typecheck/test/build)がpushイベントでは起動せず、`workflow_dispatch`の手動起動でのみ成功する。billing枯渇ではないことは確認済み(dwg7組織、2026-08-06時点で月2,000分中0分使用)。2026-08-07時点でも依然未解消であることを再確認済み。ユーザーに`https://github.com/dwg7/spiccato/settings/actions`の確認を依頼済み、回答が無ければ再度確認を促すこと。実害は無い(pushの前に必ずローカルでtypecheck/test/buildを確認する運用のため)が、CIの安全網として機能していない
-2. `#m=`の非推奨化計画(D7)の続き — 急ぎではない。`hfu/layers-martin`のSTAFF_PROMPT.md更新自体はD29で完了済み
-3. `hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)
+1. **オープンウェブスタイル(D16)は当面停止中** — ユーザー判断(2026-08-07)。再開する場合はDECISIONS.md D16の2026-08-07追記(カタログへの日本語`description`追加という対応方向の技術的な下調べ)を参照
+2. **`build-docs.yml`が`push`で起動しない件** — 独自CI(typecheck/test/build)がpushイベントでは起動せず、`workflow_dispatch`の手動起動でのみ成功する。billing枯渇ではないことは確認済み(dwg7組織、2026-08-06時点で月2,000分中0分使用)。2026-08-07時点でも依然未解消であることを再確認済み。ユーザーに`https://github.com/dwg7/spiccato/settings/actions`の確認を依頼済み、回答が無ければ再度確認を促すこと。実害は無い(pushの前に必ずローカルでtypecheck/test/buildを確認する運用のため)が、CIの安全網として機能していない
+3. `#m=`の非推奨化計画(D7)の続き — 急ぎではない。`hfu/layers-martin`のSTAFF_PROMPT.md更新自体はD29で完了済み
+4. `hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)
 
-bvmap背景地図の表示/非表示トグル(D9)、MCPスタイルstdio・Workers版(D10)、源内スタイル最終形(`GENNAI_PROMPT.md`、全カタログ埋め込み・STAFF_PROMPT.md互換、D10〜D15)、Map Intent検証の寛容化(D14)、プロンプトコピーボタンの対称化、オープンウェブスタイル最小限プロトタイプ(D16、方針判断待ち)は実装済み。
+bvmap背景地図の表示/非表示トグル(D9)、MCPスタイルstdio・Workers版(D10)、源内スタイル最終形(`GENNAI_PROMPT.md`、全カタログ埋め込み・STAFF_PROMPT.md互換、D10〜D15)、Map Intent検証の寛容化(D14)、プロンプトコピーボタンの対称化、オープンウェブスタイル最小限プロトタイプ(D16、当面停止)、Issue #1・#2対応(D17・layers-martin D30)は実装済み。
 
 作業前に必ず `npm run build && npm run preview -- --port 4321 --strictPort` でローカルの本番相当ビルドを確認すること。ブラウザでの目視確認より先に、コンソールから `map.isSourceLoaded('<source-id>')` を直接呼ぶ方法を使うこと(HANDOVER.mdの教訓参照)。`mcp/`・`worker/`はそれぞれ独立した`npm install`が必要(ルートの`npm install`ではインストールされない)。GitHub Pagesへの反映が止まっている場合は`gh api repos/dwg7/spiccato/pages/builds -X POST`で強制再デプロイを試すこと(HANDOVER.mdの「教訓」参照)。
 
