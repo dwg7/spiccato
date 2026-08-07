@@ -40,7 +40,7 @@ Map Intentを書く前に、spiccatoが「勝手にやってくれること」�
 
 ## カタログ1: layers-martin(既定、`catalog=https://hfu.github.io/layers-martin/catalog.json`)
 
-国土地理院ほかの日本の地理空間データ全般。以下は全source_id(意味的ノイズ(`disasterhist_*`等の地域別・年代別に細分化された災害史・教育用イラスト系列)を除く、1685件)。`id|name`形式、id昇順:
+国土地理院ほかの日本の地理空間データ全般。以下は全source_id(意味的ノイズ(`disasterhist_*`等の地域別・年代別に細分化された災害史・教育用イラスト系列)を除く、1688件)。`id|name`形式、id昇順:
 
 ```text
 01_flood_l1_shinsuishin_newlegend_data|洪水浸水想定区域（計画規模（現在の凡例））
@@ -340,7 +340,10 @@ Map Intentを書く前に、spiccatoが「勝手にやってくれること」�
 20250815rain_amakusa_0815do_sokuho|天草上島地区（8/15撮影）
 20250815rain_yatsushirohigashi_0816do_sokuho|八代東地区（8/16撮影）
 20250815rain_yatsushironishi_0816do_sokuho|八代西地区（8/16撮影）
+20260729kumamoto_kumamoto1_0803do|熊本１地区（8/3撮影）
+20260729kumamoto_kumamoto2_0729_0802do|熊本２地区（7/29、8/2撮影）
 20260729kumamoto_kumamoto3_0731_0801do|熊本３地区（7/31、8/1撮影）
+20260729kumamoto_kumamoto4_0730do|熊本４地区（7/30撮影）
 20260729kumamoto_yatsushiro_0729do|八代地区（7/29撮影）
 20260729kumamoto_yatsushiro_0729do_sokuho|八代地区（7/29撮影）
 afm|活断層図（都市圏活断層図）
