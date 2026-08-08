@@ -8,11 +8,15 @@
 
 **現在地**: https://dwg7.github.io/spiccato/ で公開中、動作確認済み。
 
-## 現在の状態(2026-08-07時点、Issue #1・#2対応(D17)完了後)
+## 現在の状態(2026-08-07時点、bboxの扱い方針転換・Staff応答のUSER目線原則(D18)反映後)
 
 **進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D10〜D15、D17)は実装完了。**オープンウェブスタイルは最小限プロトタイプ(決定的検索+極小LLMでのキーワード抽出のみ、D16)まで実装・実機検証したが、LLMの精度不足に加え決定的検索レイヤー自体の構造的ギャップ(カタログの`name`が日本語の災害名・年号を含まないエントリが実在する)が発覚し、**ユーザー判断により当面停止**(D16 2026-08-07追記)。対応方向(カタログへの日本語`description`追加)は技術的な実現可能性のみ記録し、実装は保留中。
 
-**「Map Intentエラー実例待ち」(前回セッションの最優先事項)はクローズした**: ユーザーが[Issue #1](https://github.com/dwg7/spiccato/issues/1)(M365 Copilotによるプロンプト評価レポート)・[Issue #2](https://github.com/dwg7/spiccato/issues/2)(GENNAI/Sonnetによる4件のロールプレイテスト)を作成。**想定していた「クラッシュ系エラー」ではなく、プロンプト設計への建設的レビューだった**。両Issueに登場する全source_id/style_id(計16件)を実カタログと突き合わせて検証し、捏造は1件も無かったことを確認(D14/D15の効果の裏付け)。Issue #1が指摘した4点の改善提案(bboxの例の不整合・bbox捏造防止の明記・選定手順の強化・`name`エンコーディング/`generated_at`の扱い)を、`GENNAI_PROMPT.md`(`scripts/build-gennai-prompt.mjs`)と`hfu/layers-martin`の`STAFF_PROMPT.md`の両方に反映した(D17、layers-martin側はD30)。Issue #2はテストレポートとして問題なしと確認、追加修正はしていない。
+**「Map Intentエラー実例待ち」(前回セッションの最優先事項)はクローズした**: ユーザーが[Issue #1](https://github.com/dwg7/spiccato/issues/1)(M365 Copilotによるプロンプト評価レポート)・[Issue #2](https://github.com/dwg7/spiccato/issues/2)(GENNAI/Sonnetによる4件のロールプレイテスト)を作成、両方ともコメント・クローズ済み。**想定していた「クラッシュ系エラー」ではなく、プロンプト設計への建設的レビューだった**。両Issueに登場する全source_id/style_id(計16件)を実カタログと突き合わせて検証し、捏造は1件も無かったことを確認(D14/D15の効果の裏付け)。Issue #1が指摘した4点の改善提案を、`GENNAI_PROMPT.md`(`scripts/build-gennai-prompt.mjs`)と`hfu/layers-martin`の`STAFF_PROMPT.md`の両方に反映した(D17、layers-martin側はD30)。
+
+**その後、bboxの扱いをユーザーの指示で方針転換した(D17追記・D30追記)**: 「地名から確信が持てなければbboxはnullにして利用者に範囲不明と伝える」という当初の判断(source_idの捏造と同列視)を、「確信が持てなくてもベストエフォートで推測し、狭すぎるより広めに見積もる」へ逆転させた。理由: 捏造されたsource_idは利用者が対処しようのないエラーを生むが、bboxの粗い推測は利用者がズーム・パンで補正できる不便さに留まる — 両者は同列の「捏造」ではない。
+
+**さらに、Staffの応答姿勢そのものについてもユーザーから重要な指摘があった(D18・layers-martin D31)**: Issue #2で「それらしいidを作ることはしません」とUSERに向けて表明していた応答について、内容(捏造しなかったこと)は正しいが、**その事実をUSERに向けて表明すること自体が誤り**という指摘。StaffはUSER(利用者)に直面するコンシェルジュであり、開発者向けのデバッグ情報(内部規範を守っている表明)をUSERに聞かせる必要はない。`GENNAI_PROMPT.md`・`STAFF_PROMPT.md`両方に新セクション「応答は利用者(顧客)向けであること」を追加し、「それらしいidを作らず正直に見つからないと伝える」という、USER向け応答のテンプレートをそのまま含んでいた指示文言を「見つからない旨を利用者に簡潔に伝える」に書き換えた。内部規範(捏造しないこと)自体は変更していない。
 
 **このセッションでの追加作業**: (1) `src/render.ts`のプロンプトコピーボタンの非対称性を解消。(2) オープンウェブスタイルの最小限プロトタイプを`openweb/`に実装・実機検証してD16として記録、ユーザー判断で当面停止。(3) Issue #1・#2への対応(D17・layers-martin D30)。
 
@@ -128,9 +132,9 @@ npm run preview -- --port 4321 --strictPort   # ローカル確認用(docs/openw
 
 ---
 
-`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` を全文読み、次に `DECISIONS.md` のD1・D2・D6〜D17(特にD16・D17が直近の変更)、計画ファイル `/Users/hfu/.claude/plans/scalable-snacking-spring.md`(Staffの複数スタイル導入計画、残っていれば)を読んで状況を把握してください。関連する `hfu/layers-martin` リポジトリ(`/Users/hfu/layers-martin`、ローカルにクローン済み)のD28〜D30も、STAFF_PROMPT.md/GENNAI_PROMPT.mdの経緯を理解する上で参照してください。
+`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` を全文読み、次に `DECISIONS.md` のD1・D2・D6〜D18(特にD16〜D18が直近の変更)、計画ファイル `/Users/hfu/.claude/plans/scalable-snacking-spring.md`(Staffの複数スタイル導入計画、残っていれば)を読んで状況を把握してください。関連する `hfu/layers-martin` リポジトリ(`/Users/hfu/layers-martin`、ローカルにクローン済み)のD28〜D31も、STAFF_PROMPT.md/GENNAI_PROMPT.mdの経緯を理解する上で参照してください。
 
-**最優先事項**: Issue #1・#2への対応(D17・layers-martin D30)の後片付け。spiccato・layers-martin両方でコミット済みだが**まだ`git push`していない**。プッシュしてよいか、また対応内容をIssue #1・#2にコメントするかクローズするか、ユーザーに確認すること(外部可視のアクションのため未実施)。
+**Issue #1・#2への対応は完了済み**(D17・layers-martin D30、コメント・クローズ済み)。その後の2つの追加判断も反映済み: bboxの扱いの方針転換(D17追記・D30追記、nullより広めの推測を優先)、Staff応答のUSER目線原則(D18・layers-martin D31、内部規範の遵守をUSERに表明しない)。**直近の変更(D18・D31)がpush済みかどうかは`git log`/`git status`で確認すること** — セッション終了時点でpushしたかは要確認。
 
 次点のフォローアップ候補(優先順は状況次第で判断してよい):
 1. **オープンウェブスタイル(D16)は当面停止中** — ユーザー判断(2026-08-07)。再開する場合はDECISIONS.md D16の2026-08-07追記(カタログへの日本語`description`追加という対応方向の技術的な下調べ)を参照
@@ -138,7 +142,7 @@ npm run preview -- --port 4321 --strictPort   # ローカル確認用(docs/openw
 3. `#m=`の非推奨化計画(D7)の続き — 急ぎではない。`hfu/layers-martin`のSTAFF_PROMPT.md更新自体はD29で完了済み
 4. `hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)
 
-bvmap背景地図の表示/非表示トグル(D9)、MCPスタイルstdio・Workers版(D10)、源内スタイル最終形(`GENNAI_PROMPT.md`、全カタログ埋め込み・STAFF_PROMPT.md互換、D10〜D15)、Map Intent検証の寛容化(D14)、プロンプトコピーボタンの対称化、オープンウェブスタイル最小限プロトタイプ(D16、当面停止)、Issue #1・#2対応(D17・layers-martin D30)は実装済み。
+bvmap背景地図の表示/非表示トグル(D9)、MCPスタイルstdio・Workers版(D10)、源内スタイル最終形(`GENNAI_PROMPT.md`、全カタログ埋め込み・STAFF_PROMPT.md互換、D10〜D15)、Map Intent検証の寛容化(D14)、プロンプトコピーボタンの対称化、オープンウェブスタイル最小限プロトタイプ(D16、当面停止)、Issue #1・#2対応(D17・layers-martin D30)、bboxの扱いの方針転換(D17追記・D30追記)、Staff応答のUSER目線原則(D18・layers-martin D31)は実装済み。
 
 作業前に必ず `npm run build && npm run preview -- --port 4321 --strictPort` でローカルの本番相当ビルドを確認すること。ブラウザでの目視確認より先に、コンソールから `map.isSourceLoaded('<source-id>')` を直接呼ぶ方法を使うこと(HANDOVER.mdの教訓参照)。`mcp/`・`worker/`はそれぞれ独立した`npm install`が必要(ルートの`npm install`ではインストールされない)。GitHub Pagesへの反映が止まっている場合は`gh api repos/dwg7/spiccato/pages/builds -X POST`で強制再デプロイを試すこと(HANDOVER.mdの「教訓」参照)。
 
