@@ -8,9 +8,17 @@
 
 **現在地**: https://dwg7.github.io/spiccato/ で公開中、動作確認済み。
 
-## 現在の状態(2026-08-13時点、オープンウェブスタイルの検索ギャップ修正(D16追記・layers-martin D32)後)
+## 現在の状態(2026-08-13時点、オープンウェブスタイル 地名解決・候補選択UI・リンク構築の実装後)
 
-**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D10〜D15、D17)は実装完了。**オープンウェブスタイルは、D16が見つけた決定的検索レイヤーの構造的ギャップ(日本語の災害名でレイヤーが見つからない)を、`hfu/layers-martin`の`build_catalog.rb`が集約カタログに`path`を含めるようにして解決した(D16追記、同リポジトリD32)。当初D16は「`description`追加」を対応方向として記録していたが、実装前に中身を確認したところ的外れと判明(descriptionは撮影手法の定型注記のみ、災害名は`path`に入っていた)。spiccato側のコードは無改修**(`mcp/src/catalog.ts`の`searchCatalog`は元々path検索ロジックを持っていた)。ローカル検証で「熊本地震」検索が0件→45件に改善したことを確認、本番の`catalog.json`にもデプロイ済み。**残課題はLLM側のキーワード抽出精度(未対応)** — Style 3の深掘りを続けるかは引き続きユーザー判断待ち。
+**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D10〜D15、D17)は実装完了。
+
+**オープンウェブスタイルは計画ファイルが分解した4要素すべてが実装され、プロトタイプとして一通り機能するようになった**:
+1. 決定的検索(D16実装済み)
+2. 決定的検索レイヤーの構造的ギャップ修正 — `hfu/layers-martin`の`build_catalog.rb`が集約カタログに`path`を含めるようにした(D16 2026-08-13追記、同リポジトリD32)。当初「`description`追加」を対応方向としていたが、実装前に中身を確認したところ的外れと判明(descriptionは撮影手法の定型注記のみ、災害名は`path`に入っていた)。spiccato側のコードは無改修。ローカル検証で「熊本地震」検索が0件→45件に改善、本番デプロイ済み。
+3. 地名→座標解決(`openweb/geocode.ts`、新設) — 国土地理院のジオコーディングAPIを利用。**LLMには地名抽出をさせず、利用者が直接入力する設計**(D16でLLMの意図解釈自体が信頼性不足だったため、抽出タスクを増やさない判断)。
+4. 候補選択UI・`#q=`/`#m=`リンク構築(`openweb/main.ts`) — 検索結果にチェックボックスを追加、`mcp/src/linkBuilder.ts`の`buildSpiccatoLink`(D10で実装済み)をそのまま再利用してリンクを構築。
+
+実機検証で、質問→検索→候補選択→地域名入力→リンク作成→本番spiccatoでの描画、という一連の流れが正しく動くことを確認済み(DECISIONS.md D16の2026-08-13追記参照)。**残る根本課題はLLM側のキーワード抽出精度のみ**(意図的にスコープ外、prompt/decode調整の限界に達している)。
 
 **「Map Intentエラー実例待ち」(前回セッションの最優先事項)はクローズした**: ユーザーが[Issue #1](https://github.com/dwg7/spiccato/issues/1)(M365 Copilotによるプロンプト評価レポート)・[Issue #2](https://github.com/dwg7/spiccato/issues/2)(GENNAI/Sonnetによる4件のロールプレイテスト)を作成、両方ともコメント・クローズ済み。**想定していた「クラッシュ系エラー」ではなく、プロンプト設計への建設的レビューだった**。両Issueに登場する全source_id/style_id(計16件)を実カタログと突き合わせて検証し、捏造は1件も無かったことを確認(D14/D15の効果の裏付け)。Issue #1が指摘した4点の改善提案を、`GENNAI_PROMPT.md`(`scripts/build-gennai-prompt.mjs`)と`hfu/layers-martin`の`STAFF_PROMPT.md`の両方に反映した(D17、layers-martin側はD30)。
 
@@ -31,7 +39,7 @@
 - GitHub Pages公開済み、`.github/workflows/build-docs.yml`でmainへのpush時に自動ビルド・デプロイ
 - **MCPスタイル(D10、2026-08-03実装)**: `mcp/`(ローカルstdio版)・`worker/`(Cloudflare Workers版、Streamable HTTP・ステートレス)の2トランスポート。共通ロジック(`mcp/src/server.ts`/`catalog.ts`/`linkBuilder.ts`)は完全共有、`src/shorthand.ts`に`buildShorthandLink`(ライブビュー不要な#q=構築、`render.ts`用の`buildShorthandFragment`とロジック共有)を新設して再利用。4ツール(`list_catalogs`/`search_catalog`/`get_layer_info`/`build_spiccato_link`)。stdioは子プロセス越しの生JSON-RPCで、Workersは`wrangler dev`+`curl`で、それぞれ`initialize`→`tools/call`の実通信を確認済み。生成された`#q=`/`#m=`両方のリンクを本番相当ビルドで開いて描画確認済み(欠落レイヤー無し、コンソールエラー無し)
 - **Map Intent検証の寛容化(D14、2026-08-06実装)**: `src/normalizeIntent.ts`を新設し、`src/main.ts`の`handleSubmit`で`parseMapIntent`の手前に挟む。検証はされるが実際には一度も読まれないフィールド(`spec_version`・`provenance.generated_by`/`generated_at`/`intent_id`・カタログの`id`)と、既定値で代用可能なフィールド(カタログの`type`、既定`layers_txt`)だけを、欠けている場合に限り埋める。`goal`は既存の空文字列センチネル(D6の自動生成)を再利用。`src/mapIntent.ts`(D1のvendoring境界)は無改修。本当に無効なMap Intent(`required_layers`/`required_styles`が両方とも無い等)は従来通り正しく弾かれることを確認済み。ユニットテスト7件(`src/normalizeIntent.test.ts`)。
-- **オープンウェブスタイル 最小限プロトタイプ(D16、2026-08-07実装)**: `openweb/`(`index.html`/`main.ts`/`llm.ts`)を新設、メインの1ファイルバンドルとは別のVite設定(`vite.openweb.config.ts`、`viteSingleFile()`不使用)で`docs/openweb/`にビルドする。`@huggingface/transformers`(transformers.js)+`onnx-community/Qwen2.5-0.5B-Instruct`(q4量子化)で自然文からの検索キーワード抽出、`mcp/src/catalog.ts`の`searchCatalog`をそのまま再利用した決定的検索、という一直線フローのみを実装(地名解決・候補選択UI・リンク構築は未着手)。実機検証の結果、**機構自体(ダウンロード・推論・検索呼び出し)は正常動作するが、キーワード抽出の精度が3件のテストすべてで実用に達しなかった**(詳細はDECISIONS.md D16)。方針判断待ち(上記「未着手・フォローアップ」参照)。
+- **オープンウェブスタイル プロトタイプ(D16、2026-08-07〜2026-08-13実装)**: `openweb/`(`index.html`/`main.ts`/`llm.ts`/`geocode.ts`)を新設、メインの1ファイルバンドルとは別のVite設定(`vite.openweb.config.ts`、`viteSingleFile()`不使用)で`docs/openweb/`にビルドする。`@huggingface/transformers`(transformers.js)+`onnx-community/Qwen2.5-0.5B-Instruct`(q4量子化)で自然文からの検索キーワード抽出、`mcp/src/catalog.ts`の`searchCatalog`をそのまま再利用した決定的検索、検索結果のチェックボックスによる候補選択、GSIジオコーディングAPIによる地名→bbox解決(LLM不使用)、`mcp/src/linkBuilder.ts`の`buildSpiccatoLink`再利用によるリンク構築、まで一通り実装。決定的検索レイヤーの構造的ギャップ(カタログに`path`が無かった)は`hfu/layers-martin`側(D32)で修正済み。実機検証の結果、**機構自体(ダウンロード・推論・検索・候補選択・ジオコーディング・リンク構築・本番spiccatoでの描画)は正常動作する。残る根本課題はLLMのキーワード抽出精度のみ**(詳細はDECISIONS.md D16)。
 
 ### 直近で直したバグ(重要、再発に注意)
 
@@ -52,8 +60,8 @@
 
 ### 未着手・フォローアップ
 
-1. **Issue #1・#2の後片付け** — D17・layers-martin D30で内容面の対応は完了した。まだ`git push`していない(spiccato・layers-martin両方)。また、対応内容をIssue #1・#2にコメントするか、Issueをクローズするかはユーザーに確認してから行う(外部可視のアクションのため、このセッションでは実施していない)
-2. **オープンウェブスタイル(D16)は当面停止** — ユーザー判断により深掘りを止めた(2026-08-07)。最小限プロトタイプ(`openweb/`)の実機検証で、LLMの精度不足に加えて`mcp/src/catalog.ts`の`searchCatalog`(単純な部分文字列一致)自体の構造的なギャップ(カタログの`name`が日本語の災害名・年号を含まないエントリが実在する)が判明した。対応方向としては「カタログの各エントリに日本語`description`を追加する」が有力だが、`hfu/layers-martin`のスキーマ変更(`build_catalog.rb`)を要するため未着手。再開する場合はDECISIONS.md D16の2026-08-07追記を参照
+1. ~~Issue #1・#2の後片付け~~ — 完了済み(D17・layers-martin D30、push・コメント・クローズ済み)
+2. **オープンウェブスタイル: LLM以外はすべて実装済み** — 決定的検索レイヤーのギャップ修正(`path`追加、layers-martin D32)、地名→座標解決(`openweb/geocode.ts`)、候補選択UI・`#q=`/`#m=`リンク構築(`openweb/main.ts`、`mcp/src/linkBuilder.ts`再利用)まで実装・実機検証済み(DECISIONS.md D16の2026-08-13追記参照)。残るのはLLMのキーワード抽出精度のみ(few-shot調整済みQwen2.5-0.5B-Instructでも暴走・文字化けが観測された、DECISIONS.md D16の「実機検証」節参照)、意図的にスコープ外。より大きいモデルで再挑戦するかはユーザー判断待ち
 3. **`build-docs.yml`がpushで起動しない件** — 上記「教訓」参照。ユーザーに組織`dwg7`のActions設定(`https://github.com/dwg7/spiccato/settings/actions`)確認を依頼済み、回答待ち。billing枯渇ではないことは確認済み(2026-08-06、月2,000分中0分使用)。**2026-08-07時点で再確認したところ、依然として直近の複数pushで`push`トリガーの起動が0件**(2026-08-03 13:31以降、`schedule`/`workflow_dispatch`のみ成功) — まだ解消していない
 4. **`#m=`の非推奨化(obsolete化)** — D7の条件1(`#q=`のrender_hints/cartographer_feedback拡張)はD8で実装済み。残りの条件(実用上十分な期間の安定稼働確認 → STAFF_PROMPT案内の更新 → 実際のコード削除の判断)はまだ。急ぐ必要は無い(D7参照)。**`hfu/layers-martin`のSTAFF_PROMPT.md更新自体はD29で完了済み**(下記「完了」参照) — 残るのは「実際に`#m=`のコードを削除するかどうか」という、より重い判断のみ
 5. **`hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案** — 未適用(別リポジトリのため提案のみ)。保存場所(セッション間で引き継がれない一時ディレクトリのため、消えていたら再作成が必要):
@@ -94,10 +102,11 @@ spiccato/
 │   ├── main.ts             # bootstrap: #m= → #q= → 貼り付けフォームの順で試す
 │   ├── render.ts           # UI、ライブ状態反映(D8: #q=優先、収まらなければ#m=)
 │   └── *.test.ts
-├── openweb/                # オープンウェブスタイル 最小限プロトタイプ(D16)
+├── openweb/                # オープンウェブスタイル プロトタイプ(D16、4要素すべて実装済み)
 │   ├── index.html          # 独立ページ、docs/openweb/へビルド
-│   ├── main.ts              # 質問→extractKeyword→searchCatalog→候補一覧、の一直線フロー
-│   └── llm.ts               # transformers.js + Qwen2.5-0.5B-Instruct(q4)のラッパー
+│   ├── main.ts              # 質問→extractKeyword→searchCatalog→候補選択(チェックボックス)→リンク構築
+│   ├── llm.ts               # transformers.js + Qwen2.5-0.5B-Instruct(q4)のラッパー
+│   └── geocode.ts           # GSIジオコーディングAPIで地名→bbox(LLM不使用、利用者が地名を直接入力)
 ├── public/
 │   ├── .nojekyll
 │   ├── maplibre-gl-worker.mjs(.map)   # node_modules由来、手動vendoring(D5)
@@ -137,12 +146,12 @@ npm run preview -- --port 4321 --strictPort   # ローカル確認用(docs/openw
 **Issue #1・#2への対応は完了済み**(D17・layers-martin D30、コメント・クローズ済み)。その後の2つの追加判断も反映済み: bboxの扱いの方針転換(D17追記・D30追記、nullより広めの推測を優先)、Staff応答のUSER目線原則(D18・layers-martin D31、内部規範の遵守をUSERに表明しない)。**さらにオープンウェブスタイルの検索レイヤーのギャップをlayers-martin側の`path`追加で解決した**(D16の2026-08-13追記、layers-martin D32)。すべてpush・デプロイ済み。
 
 次点のフォローアップ候補(優先順は状況次第で判断してよい):
-1. **オープンウェブスタイル: 検索レイヤーの修正は完了、LLM側は未対応** — D16が見つけた2つの課題のうち、決定的検索レイヤーのギャップは`path`追加(layers-martin D32)で解決済み。残るLLMのキーワード抽出精度(few-shot調整済みQwen2.5-0.5B-Instructでも暴走・文字化けが観測された、DECISIONS.md D16の「実機検証」節参照)は未対応。地名→座標解決・候補選択UI・`#q=`リンク構築も未着手。次に進めるかはユーザー判断待ち
+1. **オープンウェブスタイル: LLM以外はすべて実装済み** — 決定的検索レイヤーのギャップ修正(`path`追加、layers-martin D32)、地名→座標解決(`openweb/geocode.ts`)、候補選択UI・`#q=`/`#m=`リンク構築(`openweb/main.ts`、`mcp/src/linkBuilder.ts`再利用)まで実装・実機検証済み(DECISIONS.md D16の2026-08-13追記参照)。残るのはLLMのキーワード抽出精度のみ(few-shot調整済みQwen2.5-0.5B-Instructでも暴走・文字化けが観測された、DECISIONS.md D16の「実機検証」節参照)、意図的にスコープ外。より大きいモデルで再挑戦するかはユーザー判断待ち
 2. **`build-docs.yml`が`push`で起動しない件** — 独自CI(typecheck/test/build)がpushイベントでは起動せず、`workflow_dispatch`の手動起動でのみ成功する。billing枯渇ではないことは確認済み(dwg7組織、2026-08-06時点で月2,000分中0分使用)。2026-08-07時点でも依然未解消であることを再確認済み。ユーザーに`https://github.com/dwg7/spiccato/settings/actions`の確認を依頼済み、回答が無ければ再度確認を促すこと。実害は無い(pushの前に必ずローカルでtypecheck/test/buildを確認する運用のため)が、CIの安全網として機能していない
 3. `#m=`の非推奨化計画(D7)の続き — 急ぎではない。`hfu/layers-martin`のSTAFF_PROMPT.md更新自体はD29で完了済み
 4. `hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)
 
-bvmap背景地図の表示/非表示トグル(D9)、MCPスタイルstdio・Workers版(D10)、源内スタイル最終形(`GENNAI_PROMPT.md`、全カタログ埋め込み・STAFF_PROMPT.md互換、D10〜D15)、Map Intent検証の寛容化(D14)、プロンプトコピーボタンの対称化、オープンウェブスタイル最小限プロトタイプ(D16、当面停止)、Issue #1・#2対応(D17・layers-martin D30)、bboxの扱いの方針転換(D17追記・D30追記)、Staff応答のUSER目線原則(D18・layers-martin D31)は実装済み。
+bvmap背景地図の表示/非表示トグル(D9)、MCPスタイルstdio・Workers版(D10)、源内スタイル最終形(`GENNAI_PROMPT.md`、全カタログ埋め込み・STAFF_PROMPT.md互換、D10〜D15)、Map Intent検証の寛容化(D14)、プロンプトコピーボタンの対称化、Issue #1・#2対応(D17・layers-martin D30)、bboxの扱いの方針転換(D17追記・D30追記)、Staff応答のUSER目線原則(D18・layers-martin D31)、オープンウェブスタイル(D16、決定的検索・検索レイヤー修正・地名解決・候補選択UI・リンク構築まで一通り実装、layers-martin D32)は実装済み。
 
 作業前に必ず `npm run build && npm run preview -- --port 4321 --strictPort` でローカルの本番相当ビルドを確認すること。ブラウザでの目視確認より先に、コンソールから `map.isSourceLoaded('<source-id>')` を直接呼ぶ方法を使うこと(HANDOVER.mdの教訓参照)。`mcp/`・`worker/`はそれぞれ独立した`npm install`が必要(ルートの`npm install`ではインストールされない)。GitHub Pagesへの反映が止まっている場合は`gh api repos/dwg7/spiccato/pages/builds -X POST`で強制再デプロイを試すこと(HANDOVER.mdの「教訓」参照)。
 
