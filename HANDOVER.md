@@ -8,9 +8,9 @@
 
 **現在地**: https://dwg7.github.io/spiccato/ で公開中、動作確認済み。
 
-## 現在の状態(2026-08-07時点、bboxの扱い方針転換・Staff応答のUSER目線原則(D18)反映後)
+## 現在の状態(2026-08-13時点、オープンウェブスタイルの検索ギャップ修正(D16追記・layers-martin D32)後)
 
-**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D10〜D15、D17)は実装完了。**オープンウェブスタイルは最小限プロトタイプ(決定的検索+極小LLMでのキーワード抽出のみ、D16)まで実装・実機検証したが、LLMの精度不足に加え決定的検索レイヤー自体の構造的ギャップ(カタログの`name`が日本語の災害名・年号を含まないエントリが実在する)が発覚し、**ユーザー判断により当面停止**(D16 2026-08-07追記)。対応方向(カタログへの日本語`description`追加)は技術的な実現可能性のみ記録し、実装は保留中。
+**進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D10〜D15、D17)は実装完了。**オープンウェブスタイルは、D16が見つけた決定的検索レイヤーの構造的ギャップ(日本語の災害名でレイヤーが見つからない)を、`hfu/layers-martin`の`build_catalog.rb`が集約カタログに`path`を含めるようにして解決した(D16追記、同リポジトリD32)。当初D16は「`description`追加」を対応方向として記録していたが、実装前に中身を確認したところ的外れと判明(descriptionは撮影手法の定型注記のみ、災害名は`path`に入っていた)。spiccato側のコードは無改修**(`mcp/src/catalog.ts`の`searchCatalog`は元々path検索ロジックを持っていた)。ローカル検証で「熊本地震」検索が0件→45件に改善したことを確認、本番の`catalog.json`にもデプロイ済み。**残課題はLLM側のキーワード抽出精度(未対応)** — Style 3の深掘りを続けるかは引き続きユーザー判断待ち。
 
 **「Map Intentエラー実例待ち」(前回セッションの最優先事項)はクローズした**: ユーザーが[Issue #1](https://github.com/dwg7/spiccato/issues/1)(M365 Copilotによるプロンプト評価レポート)・[Issue #2](https://github.com/dwg7/spiccato/issues/2)(GENNAI/Sonnetによる4件のロールプレイテスト)を作成、両方ともコメント・クローズ済み。**想定していた「クラッシュ系エラー」ではなく、プロンプト設計への建設的レビューだった**。両Issueに登場する全source_id/style_id(計16件)を実カタログと突き合わせて検証し、捏造は1件も無かったことを確認(D14/D15の効果の裏付け)。Issue #1が指摘した4点の改善提案を、`GENNAI_PROMPT.md`(`scripts/build-gennai-prompt.mjs`)と`hfu/layers-martin`の`STAFF_PROMPT.md`の両方に反映した(D17、layers-martin側はD30)。
 
@@ -132,12 +132,12 @@ npm run preview -- --port 4321 --strictPort   # ローカル確認用(docs/openw
 
 ---
 
-`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` を全文読み、次に `DECISIONS.md` のD1・D2・D6〜D18(特にD16〜D18が直近の変更)、計画ファイル `/Users/hfu/.claude/plans/scalable-snacking-spring.md`(Staffの複数スタイル導入計画、残っていれば)を読んで状況を把握してください。関連する `hfu/layers-martin` リポジトリ(`/Users/hfu/layers-martin`、ローカルにクローン済み)のD28〜D31も、STAFF_PROMPT.md/GENNAI_PROMPT.mdの経緯を理解する上で参照してください。
+`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` を全文読み、次に `DECISIONS.md` のD1・D2・D6〜D18(特にD16の2026-08-13追記が直近の変更)、計画ファイル `/Users/hfu/.claude/plans/scalable-snacking-spring.md`(Staffの複数スタイル導入計画、残っていれば)を読んで状況を把握してください。関連する `hfu/layers-martin` リポジトリ(`/Users/hfu/layers-martin`、ローカルにクローン済み)のD28〜D32も、STAFF_PROMPT.md/GENNAI_PROMPT.mdの経緯・カタログスキーマの変遷を理解する上で参照してください。
 
-**Issue #1・#2への対応は完了済み**(D17・layers-martin D30、コメント・クローズ済み)。その後の2つの追加判断も反映済み: bboxの扱いの方針転換(D17追記・D30追記、nullより広めの推測を優先)、Staff応答のUSER目線原則(D18・layers-martin D31、内部規範の遵守をUSERに表明しない)。**直近の変更(D18・D31)がpush済みかどうかは`git log`/`git status`で確認すること** — セッション終了時点でpushしたかは要確認。
+**Issue #1・#2への対応は完了済み**(D17・layers-martin D30、コメント・クローズ済み)。その後の2つの追加判断も反映済み: bboxの扱いの方針転換(D17追記・D30追記、nullより広めの推測を優先)、Staff応答のUSER目線原則(D18・layers-martin D31、内部規範の遵守をUSERに表明しない)。**さらにオープンウェブスタイルの検索レイヤーのギャップをlayers-martin側の`path`追加で解決した**(D16の2026-08-13追記、layers-martin D32)。すべてpush・デプロイ済み。
 
 次点のフォローアップ候補(優先順は状況次第で判断してよい):
-1. **オープンウェブスタイル(D16)は当面停止中** — ユーザー判断(2026-08-07)。再開する場合はDECISIONS.md D16の2026-08-07追記(カタログへの日本語`description`追加という対応方向の技術的な下調べ)を参照
+1. **オープンウェブスタイル: 検索レイヤーの修正は完了、LLM側は未対応** — D16が見つけた2つの課題のうち、決定的検索レイヤーのギャップは`path`追加(layers-martin D32)で解決済み。残るLLMのキーワード抽出精度(few-shot調整済みQwen2.5-0.5B-Instructでも暴走・文字化けが観測された、DECISIONS.md D16の「実機検証」節参照)は未対応。地名→座標解決・候補選択UI・`#q=`リンク構築も未着手。次に進めるかはユーザー判断待ち
 2. **`build-docs.yml`が`push`で起動しない件** — 独自CI(typecheck/test/build)がpushイベントでは起動せず、`workflow_dispatch`の手動起動でのみ成功する。billing枯渇ではないことは確認済み(dwg7組織、2026-08-06時点で月2,000分中0分使用)。2026-08-07時点でも依然未解消であることを再確認済み。ユーザーに`https://github.com/dwg7/spiccato/settings/actions`の確認を依頼済み、回答が無ければ再度確認を促すこと。実害は無い(pushの前に必ずローカルでtypecheck/test/buildを確認する運用のため)が、CIの安全網として機能していない
 3. `#m=`の非推奨化計画(D7)の続き — 急ぎではない。`hfu/layers-martin`のSTAFF_PROMPT.md更新自体はD29で完了済み
 4. `hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)

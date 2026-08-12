@@ -385,6 +385,12 @@ D1 で確認した通り、この結果 `hfu/faceless-cartographer` が到達し
 
 技術的な実現可能性のみ記録しておく(調査済み、未実装): `hfu/layers-martin`の`build_catalog.rb`は個々のTileJSON(`catalog/{id}`エンドポイント)には既に`description`(GSIの`html`フィールド由来、`build_tilejson`メソッド、524〜545行目付近)を含めているが、集約カタログ`catalog.json`の`tiles[id]`エントリ(`build_catalog`メソッド、638〜645行目付近)は`name`/`content_type`のみで`description`を含まない。`description`の元データは同じビルドプロセス内で既に計算済みのため、追加の外部fetchは不要(`build_catalog`に1行足すだけの見込み)。ただし、GSIの`html`はリンクや長めの説明文を含むことがあり、1,685件分をGENNAI_PROMPT.mdに埋め込んだ場合のプロンプトサイズ増加(D13で一度サイズを理由に縮小し、D15で撤回した経緯があるだけに)は着手時に要検討。
 
+**2026-08-13追記(検索ギャップを解決、ただし`description`ではなく`path`で)**: ユーザーから「オープンウェブの一手を進めてほしい」との指示を受け着手した。実装前に上記`description`案の中身を実際に確認したところ、**`description`は撮影手法に関する定型的な注記(「空中写真から自動処理により作成した正射画像です...」)であり、災害名を一切含まないこと**が判明した。一方、同じレイヤーの`path`(カテゴリ階層)を確認すると`["令和8年(2026年)熊本地震", "正射画像（速報）", "八代地区"]`のように、**災害イベント名がカテゴリ階層の先頭に明示的に入っていた**。GSIの`layers.txt`は災害対応画像を災害イベント名でカテゴリ化しているため。つまりD16時点で記録した対応方向(`description`)は的外れで、正しい修正対象は`path`だった。
+
+さらに、`mcp/src/catalog.ts`の`searchCatalog`は**元々`entry?.path?.some((p) => p.toLowerCase().includes(q))`というpath検索ロジックを既に持っていた**が、集約カタログ`catalog.json`に`path`が一度も含まれていなかったため、このロジックは実質dead codeだった。修正は`hfu/layers-martin`の`build_catalog.rb`に`path`を追加するだけで完結し(同リポジトリDECISIONS.md D32)、**spiccato側(`mcp/src/catalog.ts`・`openweb/`・MCPサーバー)は無改修**。ローカル検証で、`searchCatalog`と同一のロジックを再現して本番相当の`catalog.json`に対し「熊本地震」を検索したところ、0件→45件(令和8年分7件を含む)に改善したことを確認した。本番の`https://hfu.github.io/layers-martin/catalog.json`にもデプロイ済みで、`path`フィールドが実際に配信されていることを確認済み。
+
+**残課題**: この修正は決定的検索レイヤーの構造的ギャップ(2.)のみを解決する。LLM側のキーワード抽出精度(1.)は未対応のまま — few-shot調整済みのQwen2.5-0.5B-Instructが実用的な精度で「熊本地震」のような簡潔なキーワードを安定して返せるかは、依然検証が必要(前回の実機検証では暴走・文字化けが観測された)。地名→座標解決・候補選択UI・`#q=`リンク構築も未着手のまま。Style 3の深掘りを次に進めるかどうかは、引き続きユーザー判断を仰ぐ。
+
 ## D17: Issue #1・#2(テストレポート)を踏まえたGENNAI_PROMPT.md/STAFF_PROMPT.mdの改善
 
 **Status**: Accepted
