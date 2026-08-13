@@ -8,15 +8,16 @@
 
 **現在地**: https://dwg7.github.io/spiccato/ で公開中、動作確認済み。
 
-## 現在の状態(2026-08-13時点、Issue #3・#5・#6対応(D19)後)
+## 現在の状態(2026-08-13時点、Issue #3・#5・#6対応(D19)完了・全Issueクローズ済み)
 
-**直近の作業**: ユーザーが`dwg7/spiccato`に4件のIssue(#3〜#6)を作成し、実質3つの作業に対応した(D19):
+**直近の作業**: ユーザーが`dwg7/spiccato`に4件のIssue(#3〜#6)を作成し、実質3つの作業に対応した(D19)。**push・コメント・クローズまですべて完了済み**(Issue #1〜#6、いずれもクローズ済み — 2026-08-13時点でオープンなIssueは無い):
+
 1. Cartographer画面にGeolocateControl・スケールバーを追加(Issue #6、`src/render.ts`)。
 2. `#q=`の`req`/`opt`が`source_id|label`(パイプ区切り)を取れるように拡張し、Cartographerパネルに識別子でなく名前が表示されるようにした(Issue #5後半、`src/shorthand.ts`)。label部分は`encodeURIComponent`で保護し、半角カンマ等が構造区切り文字と衝突しないようにした。**ユーザーから「複数レイヤーでlabelの記述が破綻しないか」との指摘があり、実際に破綻することを確認した上でこの保護を設計した**(元の設計案では防げなかった)。
 3. GENNAI_PROMPT.md・STAFF_PROMPT.md(`hfu/layers-martin`)両方に、label構文の説明と「リンクを提示できる場合Map Intentのテキストは併記しない」という明記を追加(Issue #3コメント・Issue #5前半)。
 4. ユーザー依頼により`#q=`パラメータ仕様全体の命名一貫性をレビューし、`encodeRef`→`buildRefEntry`に改名(既存の`parse*`/`build*`命名規則に統一)。
 
-## 前回の状態(2026-08-13、オープンウェブスタイル 地名解決・候補選択UI・リンク構築の実装後)
+**このセッションで踏んだ手順ミスの記録(教訓)**: push作業中、`cd /Users/hfu/spiccato && git fetch ...`の直後に続けて`git fetch origin && git log ...`(cd無し)を実行してしまい、Bashツールのcwdが`/Users/hfu/faceless-cartographer`(既定の作業ディレクトリ)にリセットされていたため、そちらのリポジトリに対してfetch/mergeを実行してしまった(実害は無かった — faceless-cartographer側もfast-forwardのみで、データ損失は起きていない)。**教訓: このツールのBash呼び出し間でcwdが暗黙にリセットされることがある(明示的な通知は出るが見落としやすい)。複数リポジトリを行き来する作業では、git操作のたびに`pwd`で確認するか、毎回`cd <絶対パス> &&`を明示すること。**
 
 **進行中の大きめの取り組み**: Staffを使う「スタイル」をノーマル(コピペ)以外に増やす作業に着手した(源内スタイル・MCPスタイル・オープンウェブスタイル)。計画の全体像は`/Users/hfu/.claude/plans/scalable-snacking-spring.md`(このセッション間で消えない可能性が高いパス、消えていたら[DECISIONS.md](DECISIONS.md) D10の記述から復元できる)。MCPスタイル(stdio・Workers、D10)・源内スタイル(`GENNAI_PROMPT.md`、D10〜D15、D17)は実装完了。
 
@@ -68,7 +69,7 @@
 
 ### 未着手・フォローアップ
 
-1. **Issue #3〜#6の後片付け** — D19・layers-martin D33で内容面の対応(コントロール追加・`#q=`のlabel拡張・リンク優先の徹底)は完了した。コミット済みだが**push、Issue #3〜#6へのコメント/クローズはユーザーに確認してから実施すること**(このセッションで確立した運用)
+1. ~~Issue #3〜#6の後片付け~~ — 完了済み(D19・layers-martin D33、push・コメント・クローズ済み)
 2. ~~Issue #1・#2の後片付け~~ — 完了済み(D17・layers-martin D30、push・コメント・クローズ済み)
 3. **オープンウェブスタイル: LLM以外はすべて実装済み** — 決定的検索レイヤーのギャップ修正(`path`追加、layers-martin D32)、地名→座標解決(`openweb/geocode.ts`)、候補選択UI・`#q=`/`#m=`リンク構築(`openweb/main.ts`、`mcp/src/linkBuilder.ts`再利用)まで実装・実機検証済み(DECISIONS.md D16の2026-08-13追記参照)。残るのはLLMのキーワード抽出精度のみ(few-shot調整済みQwen2.5-0.5B-Instructでも暴走・文字化けが観測された、DECISIONS.md D16の「実機検証」節参照)、意図的にスコープ外。より大きいモデルで再挑戦するかはユーザー判断待ち
 4. **`build-docs.yml`がpushで起動しない件** — 上記「教訓」参照。ユーザーに組織`dwg7`のActions設定(`https://github.com/dwg7/spiccato/settings/actions`)確認を依頼済み、回答待ち。billing枯渇ではないことは確認済み(2026-08-06、月2,000分中0分使用)。**2026-08-07時点で再確認したところ、依然として直近の複数pushで`push`トリガーの起動が0件**(2026-08-03 13:31以降、`schedule`/`workflow_dispatch`のみ成功) — まだ解消していない
@@ -94,7 +95,7 @@
 
 ```
 spiccato/
-├── DECISIONS.md          # ADR、D1〜D16。設計判断の正
+├── DECISIONS.md          # ADR、D1〜D19。設計判断の正
 ├── HANDOVER.md            # このファイル
 ├── README.md
 ├── GENNAI_PROMPT.md       # 源内スタイル、自動生成(D10〜D15)。手で編集しない
@@ -150,18 +151,18 @@ npm run preview -- --port 4321 --strictPort   # ローカル確認用(docs/openw
 
 ---
 
-`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` を全文読み、次に `DECISIONS.md` のD1・D2・D6〜D19(特にD19が直近の変更)、計画ファイル `/Users/hfu/.claude/plans/scalable-snacking-spring.md`(Staffの複数スタイル導入計画、残っていれば)を読んで状況を把握してください。関連する `hfu/layers-martin` リポジトリ(`/Users/hfu/layers-martin`、ローカルにクローン済み)のD28〜D33も、STAFF_PROMPT.md/GENNAI_PROMPT.mdの経緯・カタログスキーマの変遷を理解する上で参照してください。
+`/Users/hfu/spiccato` で作業を続けます。このリポジトリは `hfu/faceless-cartographer`(staccatoアーキテクチャの第二世代Cartographer)の第三世代実装で、Map IntentをURLフラグメントに直接埋め込んで開くlink-nativeなCartographerです。まず `HANDOVER.md` を全文読み、次に `DECISIONS.md` のD1・D2・D6〜D19(特にD16〜D19が直近の変更)、計画ファイル `/Users/hfu/.claude/plans/scalable-snacking-spring.md`(Staffの複数スタイル導入計画、残っていれば)を読んで状況を把握してください。関連する `hfu/layers-martin` リポジトリ(`/Users/hfu/layers-martin`、ローカルにクローン済み)のD28〜D33も、STAFF_PROMPT.md/GENNAI_PROMPT.mdの経緯・カタログスキーマの変遷を理解する上で参照してください。
 
-**Issue #1・#2への対応は完了済み**(D17・layers-martin D30、コメント・クローズ済み)。その後の2つの追加判断も反映済み: bboxの扱いの方針転換(D17追記・D30追記、nullより広めの推測を優先)、Staff応答のUSER目線原則(D18・layers-martin D31、内部規範の遵守をUSERに表明しない)。**さらにオープンウェブスタイルの検索レイヤーのギャップをlayers-martin側の`path`追加で解決した**(D16の2026-08-13追記、layers-martin D32)。すべてpush・デプロイ済み。
+**このセッション終了時点で、`dwg7/spiccato`のIssueは全件(#1〜#6)クローズ済み、両リポジトリともpush・デプロイ済み、未着手のオープンなIssueは無い。** 次にユーザーから新しいIssueやフィードバックが来たら、まずそれを読むところから始めること(このリポジトリの運用パターン: ユーザーが実際にStaffプロンプトを試した結果をIssueとして報告 → 内容を精査 → 計画してから対応 → 実機検証 → コミット → push/コメント/クローズはユーザーに確認してから)。
 
-次点のフォローアップ候補(優先順は状況次第で判断してよい):
-1. **オープンウェブスタイル: LLM以外はすべて実装済み** — 決定的検索レイヤーのギャップ修正(`path`追加、layers-martin D32)、地名→座標解決(`openweb/geocode.ts`)、候補選択UI・`#q=`/`#m=`リンク構築(`openweb/main.ts`、`mcp/src/linkBuilder.ts`再利用)まで実装・実機検証済み(DECISIONS.md D16の2026-08-13追記参照)。残るのはLLMのキーワード抽出精度のみ(few-shot調整済みQwen2.5-0.5B-Instructでも暴走・文字化けが観測された、DECISIONS.md D16の「実機検証」節参照)、意図的にスコープ外。より大きいモデルで再挑戦するかはユーザー判断待ち
-2. **`build-docs.yml`が`push`で起動しない件** — 独自CI(typecheck/test/build)がpushイベントでは起動せず、`workflow_dispatch`の手動起動でのみ成功する。billing枯渇ではないことは確認済み(dwg7組織、2026-08-06時点で月2,000分中0分使用)。2026-08-07時点でも依然未解消であることを再確認済み。ユーザーに`https://github.com/dwg7/spiccato/settings/actions`の確認を依頼済み、回答が無ければ再度確認を促すこと。実害は無い(pushの前に必ずローカルでtypecheck/test/buildを確認する運用のため)が、CIの安全網として機能していない
-3. `#m=`の非推奨化計画(D7)の続き — 急ぎではない。`hfu/layers-martin`のSTAFF_PROMPT.md更新自体はD29で完了済み
-4. `hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案 — 前回セッションでscratchpadに書いたが未適用(HANDOVER.mdのパス参照、消えていたら再作成が必要)
+明確な「次の一手」は無い状態。次点のフォローアップ候補(優先順は状況次第、いずれも急ぎではない):
+1. **オープンウェブスタイルのLLM精度** — 決定的検索・地名解決・候補選択UI・リンク構築は実装済み(D16)。残るのはLLM(Qwen2.5-0.5B-Instruct)のキーワード抽出精度のみで、few-shot調整済みでも暴走・文字化けが観測された(DECISIONS.md D16「実機検証」節参照)。意図的にスコープ外としたまま。より大きいモデルで再挑戦するかはユーザー判断待ち
+2. **`build-docs.yml`が`push`で起動しない件** — 独自CI(typecheck/test/build)がpushイベントでは起動せず、`workflow_dispatch`の手動起動でのみ成功する。billing枯渇ではないことは確認済み。ユーザーに`https://github.com/dwg7/spiccato/settings/actions`の確認を依頼済み、2026-08-07時点でも未解消。回答が無ければ再度確認を促すこと。実害は無い(pushの前に必ずローカルでtypecheck/test/buildを確認する運用のため)が、CIの安全網として機能していない
+3. `#m=`の非推奨化計画(D7)の続き — `hfu/layers-martin`のSTAFF_PROMPT.md更新自体はD29で完了済み、残るのは「実際にコード削除するか」のより重い判断のみ
+4. `hfu/faceless-cartographer`のDECISIONS.mdへのクロスリファレンス提案 — 未適用、scratchpadに書いたが消えていたら再作成が必要(HANDOVER.mdのパス参照)
 
 bvmap背景地図の表示/非表示トグル(D9)、MCPスタイルstdio・Workers版(D10)、源内スタイル最終形(`GENNAI_PROMPT.md`、全カタログ埋め込み・STAFF_PROMPT.md互換、D10〜D15)、Map Intent検証の寛容化(D14)、プロンプトコピーボタンの対称化、Issue #1・#2対応(D17・layers-martin D30)、bboxの扱いの方針転換(D17追記・D30追記)、Staff応答のUSER目線原則(D18・layers-martin D31)、オープンウェブスタイル(D16、決定的検索・検索レイヤー修正・地名解決・候補選択UI・リンク構築まで一通り実装、layers-martin D32)、Issue #3・#5・#6対応(コントロール追加・`#q=`へのlabel拡張・リンク優先の徹底、D19・layers-martin D33)は実装済み。
 
-作業前に必ず `npm run build && npm run preview -- --port 4321 --strictPort` でローカルの本番相当ビルドを確認すること。ブラウザでの目視確認より先に、コンソールから `map.isSourceLoaded('<source-id>')` を直接呼ぶ方法を使うこと(HANDOVER.mdの教訓参照)。`mcp/`・`worker/`はそれぞれ独立した`npm install`が必要(ルートの`npm install`ではインストールされない)。GitHub Pagesへの反映が止まっている場合は`gh api repos/dwg7/spiccato/pages/builds -X POST`で強制再デプロイを試すこと(HANDOVER.mdの「教訓」参照)。
+作業前に必ず `npm run build && npm run preview -- --port 4321 --strictPort` でローカルの本番相当ビルドを確認すること。ブラウザでの目視確認より先に、コンソールから `map.isSourceLoaded('<source-id>')` を直接呼ぶ方法を使うこと(HANDOVER.mdの教訓参照)。`mcp/`・`worker/`はそれぞれ独立した`npm install`が必要(ルートの`npm install`ではインストールされない)。GitHub Pagesへの反映が止まっている場合は`gh api repos/dwg7/spiccato/pages/builds -X POST`で強制再デプロイを試すこと。**複数リポジトリ(spiccato・layers-martin)を行き来する際は、git操作のたびに`pwd`で確認するか毎回`cd <絶対パス> &&`を明示すること — Bashツールのcwdが暗黙にリセットされ、意図しないリポジトリに対してgit操作してしまう事故が実際に起きている**(上記「現在の状態」参照、幸い実害は無かった)。
 
 ---
