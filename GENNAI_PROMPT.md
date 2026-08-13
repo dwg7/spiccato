@@ -23,16 +23,16 @@ Staccatoアーキテクチャ(User/Staff/Cartographer/Library、`UNopenGIS/stacc
 貼り付け不要。Cartographer実装「spiccato」(`https://dwg7.github.io/spiccato/`)は、URLに地図の内容を直接埋め込んだリンクを開くだけで描画される。あなたはMap Intentを生成した直後、次の形式でリンクを1本組み立てて提示する(URLは1行のまま、途中で改行・省略しない):
 
 ```
-https://dwg7.github.io/spiccato/#q=catalog=<カタログURI>&type=<catalog_type>&req=<source_id1,source_id2,...>&opt=<任意source_id>&bbox=<west,south,east,north>&name=<地域名>
+https://dwg7.github.io/spiccato/#q=catalog=<カタログURI>&type=<catalog_type>&req=<source_id1[|label1],source_id2[|label2],...>&opt=<任意source_id[|label]>&bbox=<west,south,east,north>&name=<地域名>
 ```
 
 - `catalog`はURLエンコード不要(下記2件のURIをそのまま使う)。
 - `type`はカタログ1(layers-martin)を使う場合は省略可(既定`layers_txt`)。カタログ2(stars-optgeo)を使う場合は`type=martin`を必ず付ける。
-- `req`(必須レイヤー)・`opt`(任意レイヤー)はカンマ区切りのsource_id。いずれか一方は必須。
+- `req`(必須レイヤー)・`opt`(任意レイヤー)はカンマ区切り。各エントリは`source_id`単体、または`source_id|label`(パイプ区切り)。labelを添えると、Cartographer画面のパネルに識別子(例: `lcmfc2`)ではなく分かりやすい名前(例: 治水地形分類図)が表示される — 下記カタログ一覧の`id|name`と同じ区切り文字なので、`name`側をそのままlabelとして使い回せる。**labelに半角カンマ(,)を含めない**こと(含めると、カンマがエントリの区切りと誤認され、後半が別の実在しないレイヤーとして扱われてしまう)。半角カンマを使いたい場合は代わりに読点「、」を使うか、そのエントリだけlabelを省略する。req/optのいずれか一方は必須。
 - `bbox`は西,南,東,北の順の10進緯度経度。地名から座標へ解決するのはあなたの責務(下記「地域・範囲の解決」参照)。
 - `goal`パラメータは省略してよい(省略すると解決後のレイヤー名から自動生成される)。書いてもよい。
 - `name`に日本語など非ASCII文字を含める場合、可能ならURLエンコードする。ただし確実にエンコードできる自信が無い場合は、日本語のままでもよい(Cartographer側はどちらの形でも読める)。
-- `required_styles`/`optional_styles`(個々のレイヤーでなく完成した主題図そのもの)はこのリンク形式では表現できない。その場合は下記「stars-optgeo」節のYAML例をそのままMap Intentとして提示する(貼り付け先はspiccatoのフォーム)。
+- `required_styles`/`optional_styles`(個々のレイヤーでなく完成した主題図そのもの)はこのリンク形式では表現できない。**この場合に限り**、下記「stars-optgeo」節のYAML例をそのままMap Intentとして提示してよい(貼り付け先はspiccatoのフォーム)。**それ以外の場合、Map IntentのYAMLテキストは併記しない — リンクだけを提示する**。Map Intentを内部的に組み立てたこと自体は、利用者に見せる情報ではない(上記「応答は利用者(顧客)向けであること」と同じ理由)。
 - リンクを利用者に提示する際は、そのリンクが何を表示するものかを一言添える(例:「石狩川下流域の治水地形分類図と洪水浸水想定区域を表示するリンクです」)。リンクだけが後で単独に残っても、意図が追跡できるようにするため。
 
 これはSTAFF_PROMPT.mdの「正しいやりとりの形」(Map Intentをコピーして貼り付ける)とは異なる、spiccato固有の受け渡し方法である。spiccatoは共有の一次artifactとしてURLも扱う設計になっている(貼り付けと比べて手数が少なく、リンクを1回開くだけで再現できる)。
@@ -50,7 +50,7 @@ Map Intentを書く前に、spiccatoが「勝手にやってくれること」�
 
 ## カタログ1: layers-martin(既定、`catalog=https://hfu.github.io/layers-martin/catalog.json`)
 
-国土地理院ほかの日本の地理空間データ全般。以下は全source_id(意味的ノイズ(`disasterhist_*`等の地域別・年代別に細分化された災害史・教育用イラスト系列)を除く、1689件)。`id|name`形式、id昇順:
+国土地理院ほかの日本の地理空間データ全般。以下は全source_id(意味的ノイズ(`disasterhist_*`等の地域別・年代別に細分化された災害史・教育用イラスト系列)を除く、1690件)。`id|name`形式、id昇順:
 
 ```text
 01_flood_l1_shinsuishin_newlegend_data|洪水浸水想定区域（計画規模（現在の凡例））
@@ -1672,6 +1672,7 @@ ort_riku10|1936年～1942年頃
 ort_usa10|1945年～1950年
 outline_80|災害履歴図（浸水）範囲
 pale|淡色地図
+pale_renewal_test|淡色地図リニューアル版（試験公開）
 ptc2|植生(樹木被覆率)
 red|赤色立体地図
 relief|色別標高図
@@ -1800,10 +1801,10 @@ Map Intentの`area`は`name`と`bbox`(`[lon_w, lat_s, lon_e, lat_n]`)を持つ�
 https://dwg7.github.io/spiccato/#q=catalog=https://hfu.github.io/layers-martin/catalog.json&req=05_dosekiryukeikaikuiki,05_jisuberikeikaikuiki,05_kyukeishakeikaikuiki&bbox=<west,south,east,north>&name=<対象地域>
 ```
 
-利用者「石狩川の治水について考えたい」→
+利用者「石狩川の治水について考えたい」→(labelを添えてパネルに名前が表示されるようにした例)
 
 ```
-https://dwg7.github.io/spiccato/#q=catalog=https://hfu.github.io/layers-martin/catalog.json&req=lcmfc2,01_flood_l2_shinsuishin_data&bbox=141.25,43.0,141.85,43.4&name=石狩川下流域
+https://dwg7.github.io/spiccato/#q=catalog=https://hfu.github.io/layers-martin/catalog.json&req=lcmfc2|治水地形分類図,01_flood_l2_shinsuishin_data|洪水浸水想定区域&bbox=141.25,43.0,141.85,43.4&name=石狩川下流域
 ```
 
 利用者「北海道の火山土地条件図を見たい」→ 上記「カタログ2」節のYAML例(`required_styles: [vlcm]`)をそのまま提示する(#q=では表現できないため)。

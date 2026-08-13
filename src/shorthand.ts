@@ -14,8 +14,19 @@ import type { Area, LayerRef, MapIntent, RenderHints } from './types.ts';
 // Wire format (everything after "#q="): a standard query string.
 //   catalog     (required)  catalog_context.active_catalogs[0].uri
 //   type        (optional)  catalog_type, default "layers_txt"
-//   req         (optional)  comma-separated required_layers[*].source_id
-//   opt         (optional)  comma-separated optional_layers[*].source_id
+//   req         (optional)  comma-separated required_layers[*], each entry
+//                            either a bare source_id or "source_id|label"
+//                            (DECISIONS.md D19 -- Issue #5 pointed out that
+//                            the Cartographer panel had nothing but the raw
+//                            source_id to display; render.ts already falls
+//                            back to `label ?? source_id`, so carrying label
+//                            here was the only missing piece). The "|" was
+//                            chosen to match the "id|name" convention
+//                            GENNAI_PROMPT.md's embedded catalog listing
+//                            already uses (scripts/build-gennai-prompt.mjs),
+//                            so Staff sees one convention, not two.
+//   opt         (optional)  comma-separated optional_layers[*], same
+//                            "source_id" / "source_id|label" entry syntax
 //                            (at least one of req/opt must be non-empty)
 //   bbox        (optional)  "west,south,east,north"
 //   name        (optional)  area.name
@@ -61,6 +72,40 @@ function parseIdList(raw: string | null): string[] {
     .filter((s) => s.length > 0);
 }
 
+// A req/opt entry is "source_id" or "source_id|label" (D19). The label half
+// is percent-encoded on write (buildRefEntry below) so a label containing a
+// literal "," or "|" can never be mistaken for the entry/id separators --
+// without this, a single label with a stray comma would silently split into
+// a bogus extra "layer" (its tail) that fails to resolve against the
+// catalog. Staff agents constructing this by hand (no code execution) can't
+// run encodeURIComponent themselves, so GENNAI_PROMPT.md/STAFF_PROMPT.md
+// separately tell them to just avoid literal commas in labels -- this
+// decode path is the safety net for links built by code (openweb/,
+// mcp/src/linkBuilder.ts), not a substitute for that guidance.
+function parseRefEntry(entry: string): LayerRef {
+  const sep = entry.indexOf('|');
+  if (sep === -1) return { source_id: entry };
+  const source_id = entry.slice(0, sep);
+  const rawLabel = entry.slice(sep + 1);
+  if (rawLabel === '') return { source_id };
+  try {
+    return { source_id, label: decodeURIComponent(rawLabel) };
+  } catch {
+    // Malformed percent-encoding (e.g. a hand-typed label with a lone "%")
+    // -- fall back to the raw text rather than reject the whole link,
+    // same Postel's-law-leaning policy as normalizeIntent.ts.
+    return { source_id, label: rawLabel };
+  }
+}
+
+function parseRefList(raw: string | null): LayerRef[] {
+  return parseIdList(raw).map(parseRefEntry);
+}
+
+function buildRefEntry(ref: LayerRef): string {
+  return ref.label ? `${ref.source_id}|${encodeURIComponent(ref.label)}` : ref.source_id;
+}
+
 function parseNumber(raw: string | null): number | undefined {
   if (raw === null) return undefined;
   const n = Number(raw);
@@ -79,8 +124,8 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
   const catalogUri = params.get('catalog');
   if (!catalogUri) return null;
 
-  const required = parseIdList(params.get('req'));
-  const optional = parseIdList(params.get('opt'));
+  const required = parseRefList(params.get('req'));
+  const optional = parseRefList(params.get('opt'));
   if (required.length === 0 && optional.length === 0) return null;
 
   const bbox = parseBbox(params.get('bbox'));
@@ -116,7 +161,6 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
   const missing = parseIdList(params.get('missing'));
   const unrenderable = parseIdList(params.get('unrenderable'));
 
-  const toRefs = (ids: string[]): LayerRef[] => ids.map((source_id) => ({ source_id }));
   const now = new Date().toISOString();
 
   const intent: MapIntent = {
@@ -128,8 +172,8 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
     catalog_context: {
       active_catalogs: [{ id: 'catalog', type: catalogType, uri: catalogUri }]
     },
-    ...(required.length > 0 ? { required_layers: toRefs(required) } : {}),
-    ...(optional.length > 0 ? { optional_layers: toRefs(optional) } : {}),
+    ...(required.length > 0 ? { required_layers: required } : {}),
+    ...(optional.length > 0 ? { optional_layers: optional } : {}),
     ...(renderHints ? { render_hints: renderHints } : {}),
     ...(missing.length > 0 || unrenderable.length > 0
       ? { cartographer_feedback: { missing_layers: missing, unrenderable_layers: unrenderable } }
@@ -160,8 +204,9 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
 //     the next open would lose the advisory in render.ts
 // Deliberately does NOT check relationships_to_highlight/resolution_policy/
 // per-catalog `version` -- current example intents don't exercise the first
-// two, and D6 already treats source_id-only layer refs (no label, no
-// per-catalog version pin) as an accepted simplification of this format.
+// two, and D6/D19 already treat the lack of a per-catalog version pin as an
+// accepted simplification of this format (labels round-trip since D19; only
+// `version` is still dropped).
 function buildShorthandParams(intent: MapIntent): URLSearchParams | null {
   const catalogs = intent.catalog_context.active_catalogs;
   if (catalogs.length !== 1) return null;
@@ -177,8 +222,8 @@ function buildShorthandParams(intent: MapIntent): URLSearchParams | null {
   const params = new URLSearchParams();
   params.set('catalog', catalogs[0].uri);
   if (catalogs[0].type !== 'layers_txt') params.set('type', catalogs[0].type);
-  if (required.length > 0) params.set('req', required.map((r) => r.source_id).join(','));
-  if (optional.length > 0) params.set('opt', optional.map((r) => r.source_id).join(','));
+  if (required.length > 0) params.set('req', required.map(buildRefEntry).join(','));
+  if (optional.length > 0) params.set('opt', optional.map(buildRefEntry).join(','));
   if (intent.area?.bbox) params.set('bbox', intent.area.bbox.join(','));
   if (intent.area?.name) params.set('name', intent.area.name);
   if (intent.goal) params.set('goal', intent.goal);

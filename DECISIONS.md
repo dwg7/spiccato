@@ -446,3 +446,29 @@ Staccatoアーキテクチャの4者モデル(User/Staff/Cartographer/Library)�
 あわせて、両ファイル中で「それらしいidを作らず正直に『見つからない』と伝える」という、USER向け応答のテンプレートをそのまま含んでいた3箇所の文言を、「見つからない旨を利用者に簡潔に伝える」という、内部規範への言及を含まない表現に書き換えた。**内部規範(捏造しないこと)自体は一切変更していない** — 変わったのは、その規範をUSERにどう伝えるか(あるいは伝えないか)という表現面のみ。
 
 **Consequences**: `scripts/build-gennai-prompt.mjs`・`hfu/layers-martin`の`STAFF_PROMPT.md`を変更(同リポジトリDECISIONS.md D31)。GENNAI_PROMPT.mdは次回`npm run build`のprebuildで反映される。この原則は今後Staffプロンプトに新しい指示を追加する際、常に「これはUSERへの応答に含めてよい情報か、それとも開発者向けの説明に留めるべきか」を区別する基準として適用する。
+
+## D19: Issue #3・#5・#6への対応 — コントロール追加・`#q=`へのlabel拡張・リンク優先の徹底
+
+**Status**: Accepted
+
+**Context**: ユーザーが`dwg7/spiccato`に4件のIssueを作成した。精査の結果、実質3つの独立した作業に集約できた:
+
+- [Issue #6](https://github.com/dwg7/spiccato/issues/6)「コントロール追加」: Cartographer画面へのGeolocationControl・スケールバー追加。
+- [Issue #3](https://github.com/dwg7/spiccato/issues/3)「Copilotでのテスト」のコメント + [Issue #5](https://github.com/dwg7/spiccato/issues/5)「UX所見・改善項目」前半: STAFF_PROMPT.mdがGENNAI_PROMPT.mdと比べてリンクを出さないことがある、Map Intentのテキスト提示は当面封印してリンクを優先すべき、という指摘。
+- Issue #5後半: Cartographer左パネルに識別子(`lcmfc2`等)ではなく名前が表示されるようにしてほしい、という指摘。
+
+[Issue #4](https://github.com/dwg7/spiccato/issues/4)「源内でのテスト」は追加の不具合ではなく、GENNAI_PROMPT.mdが既にリンク優先(必要な場合のみYAML+理由説明で例外)を実現できていることを示す確認材料として参照した。
+
+**事前調査で判明した事実**: Issue #5後半について、`src/render.ts`は既に`label ?? source_id`というフォールバックでlabelがあれば表示するコードを持っていた(353〜378行目付近)。欠けていたのは`#q=`のURL仕様が`source_id`しか運べずlabelを捨てていたことのみで、修正は`src/shorthand.ts`に限定できた。
+
+**Decision**:
+
+1. **Part A(Issue #6)**: `src/render.ts`に`GeolocateControl`(top-right、既定の位置情報コントロール)・`ScaleControl`(bottom-left、パネル・attributionと衝突しない位置)を追加した。MapLibre GL JS 6.1.0に標準搭載、新規依存無し。
+2. **Part B(Issue #5後半)**: `src/shorthand.ts`の`#q=`ワイヤーフォーマットを拡張し、`req`/`opt`の各エントリが`source_id`単体、または`source_id|label`(パイプ区切り)を取れるようにした。パイプを選んだ理由: GENNAI_PROMPT.md自身の埋め込みカタログが既に`id|name`形式(パイプ区切り)を使っており、Staffにとって一貫した記法になる。label部分は`encodeURIComponent`/`decodeURIComponent`で保護し(新設`buildRefEntry`/`parseRefEntry`、命名は既存の`parse*`/`build*`規約に合わせた — 当初`encodeRef`としていたが、下記「命名一貫性レビュー」で`build*`に改名)、labelに含まれる`,`や`|`が構造区切り文字と衝突しないようにした。デコードに失敗する不正な入力(手書きURLの孤立した`%`等)は例外を握りつぶして生の文字列のまま扱う(Postel's law、`normalizeIntent.ts`と同じ方針)。**この保護はコードで構築する場合(openweb・MCPサーバー)にのみ有効** — Staffが手でURLを書く場合はencodeURIComponentを実行できないため、プロンプト側(下記3)で「labelに半角カンマを含めない」注意を追加した。`src/render.ts`・`mcp/src/linkBuilder.ts`・`openweb/main.ts`はいずれも無改修で恩恵を受けた(`openweb/main.ts`は既に`label: h.name`を渡していた)。ユーザーから「複数レイヤーを渡す場合にlabelの記述が破綻しないか」との指摘があり、実際に(半角カンマを含むlabelが後続エントリを汚染する形で)破綻することを確認した上でこの保護を設計した — 詳細は`src/shorthand.test.ts`の該当テスト参照。
+3. **Part C(Issue #3コメント・Issue #5前半)**: `GENNAI_PROMPT.md`(`scripts/build-gennai-prompt.mjs`)・`STAFF_PROMPT.md`(`hfu/layers-martin`、D33)の「#q=構築」節に、(a)Part Bのlabel構文の説明、(b)「リンクを提示できる場合、Map IntentのYAMLテキストは併記しない」という明記、(c)`required_styles`/`optional_styles`等の真にリンクを構築できない場合に限りYAML提示してよい、という例外条件を追加した。STAFF_PROMPT.mdにはさらに、コード実行環境があれば`#m=`の構築を試みてから、それでも構築できない場合に限りYAMLへフallbackする、という段階を追加した(GENNAI_PROMPT.mdの対象読者はインターネット接続が無い前提のため、この段階は省略しYAML直行のままとした)。
+
+**命名一貫性レビュー**: Part B実装後、ユーザーから「`#q=`のパラメータ仕様にlayer/layers、label/labelsのような命名の不整合が無いか確認してほしい」との依頼があり、見直した。`req`/`opt`は既に確立された`parse*`(読み取り側)/`build*`(書き込み側)の対称命名(`parseShorthandFragment`⇔`buildShorthandParams`/`buildShorthandFragment`/`buildShorthandLink`、`parseBbox`、`parseIdList`)を持っていたが、新設した`encodeRef`だけが`encode`という第三の動詞を使っており浮いていたため、`buildRefEntry`に改名した。それ以外(`label`は常に単数、`req`/`opt`は常に複数エントリのカンマ区切りリストという役割分担)に不整合は見つからなかった。
+
+**検証**: `npm run typecheck && npm test`(105件、mcp/worker側13件も含め全通過)、`npm run build`。本番相当ビルドで、(1) GeolocateControl(「Location not available」ボタン、自動化ブラウザでは位置情報許可が無いため文言のみ確認)・スケールバー(「20 km」表示)が地図に表示されること、(2) label付き`#q=`リンク(`req=lcmfc2|治水地形分類図,01_flood_l2_shinsuishin_data|洪水浸水想定区域、想定最大規模`、全角読点を含むlabelも含む)を開き、左パネルに識別子でなく名前が表示されることを実機確認した。コンソールに新規エラー無し。
+
+**Consequences**: `src/render.ts`(コントロール2件追加)・`src/shorthand.ts`(label拡張、doc comment更新)・`src/shorthand.test.ts`(新規テスト5件追加)・`scripts/build-gennai-prompt.mjs`・`hfu/layers-martin`の`STAFF_PROMPT.md`(同D33)を変更。`mcp/`・`worker/`・`openweb/`はいずれも無改修。既存の`#q=`リンク(labelを含まない)は後方互換のまま動作する。

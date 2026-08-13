@@ -3,7 +3,7 @@
 // the `MapLibreMap` alias it ships for exactly this reason, since a plain
 // `Map` import would shadow the built-in Map class used throughout this
 // file (layerIdsBySourceId, visibility, legendBySourceId, ...).
-import { MapLibreMap, NavigationControl, AttributionControl, TerrainControl, Popup } from 'maplibre-gl';
+import { MapLibreMap, NavigationControl, AttributionControl, TerrainControl, GeolocateControl, ScaleControl, Popup } from 'maplibre-gl';
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { load as yamlLoad, dump as yamlDump } from 'js-yaml';
 import { LayerControl } from 'maplibre-gl-layer-control';
@@ -437,8 +437,10 @@ export function renderMapView(
   // tool, not a real bug (see DECISIONS.md).
   map.on('error', (e) => console.error('MapLibre error:', e.error?.message ?? e));
   map.addControl(new NavigationControl());
+  map.addControl(new GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true }));
   map.addControl(new AttributionControl({ compact: true }), 'bottom-right');
   map.addControl(new TerrainControl({ source: 'mapterhorn', exaggeration: 1 }), 'top-right');
+  map.addControl(new ScaleControl(), 'bottom-left');
 
   try {
     const thematicSourceIds = new Set(resolved.map((r) => r.source_id));

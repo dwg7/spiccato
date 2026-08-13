@@ -31,6 +31,52 @@ describe('parseShorthandFragment', () => {
     expect(intent!.goal).toBe('テスト用の goal');
   });
 
+  // DECISIONS.md D19: req/opt entries may carry a label after "|".
+  it('parses source_id|label entries, mixed with bare source_ids, in req and opt', () => {
+    const hash =
+      '#q=catalog=https://example.org/catalog.json&req=' +
+      encodeURIComponent('a|Aラベル') +
+      ',b&opt=' +
+      encodeURIComponent('c|Cラベル');
+    const intent = parseShorthandFragment(hash);
+    expect(intent!.required_layers).toEqual([{ source_id: 'a', label: 'Aラベル' }, { source_id: 'b' }]);
+    expect(intent!.optional_layers).toEqual([{ source_id: 'c', label: 'Cラベル' }]);
+  });
+
+  it('decodes a comma inside a label that survived on the wire as double-encoded ("%252C")', () => {
+    // location.hash gives parseShorthandFragment the fragment exactly as it
+    // appears in the URL bar (browsers don't auto-decode it); the first
+    // decode happens right here, inside `new URLSearchParams(body)`. So a
+    // label's literal comma has to reach this function as "%252C" (what
+    // encodeRef + URLSearchParams.toString() actually produce together, see
+    // the buildShorthandFragment "round-trips a label containing a literal
+    // comma" test below) -- one decode strips it to "%2C" (still inert,
+    // doesn't match the split-on-"," below), the second (parseRefEntry's
+    // decodeURIComponent) recovers the real ",".
+    const intent = parseShorthandFragment('#q=catalog=https://example.org/catalog.json&req=a|A%252CB,b');
+    expect(intent!.required_layers).toEqual([{ source_id: 'a', label: 'A,B' }, { source_id: 'b' }]);
+  });
+
+  it('documents the limitation: a hand-typed label with only a single level of "%2C" (or a bare ",") still splits', () => {
+    // This is exactly why GENNAI_PROMPT.md/STAFF_PROMPT.md tell Staff to
+    // avoid literal commas in labels rather than expecting them to reason
+    // about double percent-encoding by hand.
+    const bare = parseShorthandFragment('#q=catalog=https://example.org/catalog.json&req=a|A,B,b');
+    expect(bare!.required_layers).toEqual([{ source_id: 'a', label: 'A' }, { source_id: 'B' }, { source_id: 'b' }]);
+    const singleEncoded = parseShorthandFragment('#q=catalog=https://example.org/catalog.json&req=a|A%2CB,b');
+    expect(singleEncoded!.required_layers).toEqual([{ source_id: 'a', label: 'A' }, { source_id: 'B' }, { source_id: 'b' }]);
+  });
+
+  it('falls back to the raw label text when it is not validly percent-encoded (lone "%")', () => {
+    const intent = parseShorthandFragment('#q=catalog=https://example.org/catalog.json&req=a|50%25off');
+    // decodeURIComponent('50%25off') succeeds and yields '50%off' here since
+    // %25 is itself a valid escape (literal "%"); this case exercises the
+    // malformed-escape fallback with a truly invalid sequence instead.
+    expect(intent!.required_layers).toEqual([{ source_id: 'a', label: '50%off' }]);
+    const malformed = parseShorthandFragment('#q=catalog=https://example.org/catalog.json&req=a|50%zzoff');
+    expect(malformed!.required_layers).toEqual([{ source_id: 'a', label: '50%zzoff' }]);
+  });
+
   it('accepts optional-only (no req)', () => {
     const intent = parseShorthandFragment('#q=catalog=https://example.org/catalog.json&opt=x');
     expect(intent).not.toBeNull();
@@ -110,9 +156,26 @@ describe('buildShorthandFragment', () => {
 
     const roundTripped = parseShorthandFragment(frag!);
     expect(roundTripped!.catalog_context.active_catalogs[0].uri).toBe(baseIntent.catalog_context.active_catalogs[0].uri);
-    expect(roundTripped!.required_layers).toEqual([{ source_id: 'lcmfc2' }]); // label is dropped, D6's accepted lossiness
+    // D19: labels now round-trip (previously dropped, D6's original accepted lossiness).
+    expect(roundTripped!.required_layers).toEqual([{ source_id: 'lcmfc2', label: '治水地形分類図' }]);
     expect(roundTripped!.render_hints).toEqual({ center: [130.6, 32.5], zoom: 11, bearing: 45, pitch: 30 });
     expect(roundTripped!.goal).toBe('テスト');
+  });
+
+  it('round-trips a label containing a literal comma without corrupting adjacent req entries', () => {
+    const intent: MapIntent = {
+      ...baseIntent,
+      required_layers: [
+        { source_id: 'lcmfc2', label: '治水地形分類図, 詳細版' },
+        { source_id: '01_flood_l2_shinsuishin_data' }
+      ]
+    };
+    const frag = buildShorthandFragment(intent, live);
+    const roundTripped = parseShorthandFragment(frag!);
+    expect(roundTripped!.required_layers).toEqual([
+      { source_id: 'lcmfc2', label: '治水地形分類図, 詳細版' },
+      { source_id: '01_flood_l2_shinsuishin_data' }
+    ]);
   });
 
   it('includes missing/unrenderable when present', () => {
