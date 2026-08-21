@@ -472,3 +472,24 @@ Staccatoアーキテクチャの4者モデル(User/Staff/Cartographer/Library)�
 **検証**: `npm run typecheck && npm test`(105件、mcp/worker側13件も含め全通過)、`npm run build`。本番相当ビルドで、(1) GeolocateControl(「Location not available」ボタン、自動化ブラウザでは位置情報許可が無いため文言のみ確認)・スケールバー(「20 km」表示)が地図に表示されること、(2) label付き`#q=`リンク(`req=lcmfc2|治水地形分類図,01_flood_l2_shinsuishin_data|洪水浸水想定区域、想定最大規模`、全角読点を含むlabelも含む)を開き、左パネルに識別子でなく名前が表示されることを実機確認した。コンソールに新規エラー無し。
 
 **Consequences**: `src/render.ts`(コントロール2件追加)・`src/shorthand.ts`(label拡張、doc comment更新)・`src/shorthand.test.ts`(新規テスト5件追加)・`scripts/build-gennai-prompt.mjs`・`hfu/layers-martin`の`STAFF_PROMPT.md`(同D33)を変更。`mcp/`・`worker/`・`openweb/`はいずれも無改修。既存の`#q=`リンク(labelを含まない)は後方互換のまま動作する。
+
+## D20: `#q=`に`rstyle`/`ostyle`を追加し、`required_styles`/`optional_styles`をリンクだけで表現できるようにする(D7/D8の「二つのギャップ」の片方を解消)
+
+**Status**: Accepted
+
+**Context**: `dwg7/chukei`(このリポジトリの利用者が保守する、源内向けStaffプロンプト。GENNAI_PROMPT.mdと同じ「インターネット非接続・システムプロンプト保存のみ」という制約下で動くが、対象読者は北海道total合同庁舎の非技術系職員で、GIS従事者ではない)の設計上の約束は「応答は常に1行(短い文+クリック可能なリンク1本)に収まる」こと。個々のレイヤー(`req`/`opt`)はこれが成立するが、`stars-optgeo`の完成済み主題図(`vlcm`/`vbm`等、`style_id`で参照する`required_styles`/`optional_styles`)だけは、D6/D7が定めた「`#q=`はrequired_styles/optional_stylesを表現できない」という制約により、YAMLブロックを貼り付けフォームに渡すしかなく、非技術系利用者にとって唯一「1行では終わらない」ケースになっていた。利用者から、`req`/`opt`と同様の`rstyle`/`ostyle`パラメータを`#q=`に追加できないか、素朴な追加で済むならそうしてほしい(できないなら理由を教えてほしい、その場合はChukei側でstyle_id機能自体を諦める)という相談があった。
+
+**調査した事実**: `StyleRef`(`types.ts`)は`LayerRef`と全く同じ形(`{ id, label? }`、キー名だけ`style_id`/`source_id`)。`catalog.ts`の`resolveStyles`は`resolveLayers`と全く同じ`orderedCatalogs`(`intent.catalog_context.active_catalogs`)を走査するだけで、スタイル専用の別カタログという概念は存在しない(`SUPPORTED_STYLE_CATALOG_TYPES`という`type: "martin"`限定のフィルタはあるが、これは「どのカタログを試すか」の絞り込みであって「別の場所を見る」話ではない)。つまりD6/D7時点で`required_styles`/`optional_styles`が`#q=`の対象外だったのは、単一カタログ制約に技術的に収まらないからではなく、単にD6実装時にスコープを絞った(D6には「複数カタログ・required_styles/optional_styles・sharing_policy明示的上書きはこの範囲外」と明記されている)だけだと判明した。D8で`render_hints`/`cartographer_feedback`を追加したのと同じ理屈(バイト単位の変換が要らない、IDのそのままの列挙で済む)が`style_id`にもそのまま当てはまる。
+
+**Decision**: `src/shorthand.ts`に`rstyle`/`ostyle`クエリパラメータを追加した。ワイヤー形式は`req`/`opt`と完全に同一(カンマ区切り、各エントリ`style_id`単体または`style_id|label`、labelは`buildRefEntry`/`parseRefEntry`と同じ`encodeURIComponent`保護)。`StyleRef`用に`parseStyleRefEntry`/`parseStyleRefList`/`buildStyleRefEntry`を新設した(`LayerRef`版との実装重複はあるが、両者は型として非互換なアクシデンタルな類似に過ぎず、3関数程度の重複を一般化するほどではないと判断)。
+
+- `parseShorthandFragment`: `rstyle`/`ostyle`をパースし、非空なら`required_styles`/`optional_styles`として組み込む。「req/opt/rstyle/ostyleのうち最低一つは非空」に条件を広げた(以前は「req/optのいずれか」)。
+- `buildShorthandParams`(`buildShorthandFragment`/`buildShorthandLink`共通の書き込み側): `required_styles`/`optional_styles`が非空なら即`null`を返していたブロックを削除し、代わりに`rstyle=`/`ostyle=`として直列化する。単一カタログ制約(`catalogs.length !== 1`)・`sharing_policy`明示的上書きの制約はそのまま維持 — 上記調査の通り、スタイルもレイヤーも同じ`active_catalogs`配列を見るだけなので、この2条件だけで両方をカバーできる。
+- `mcp/src/linkBuilder.ts`(`buildSpiccatoLink`)・`openweb/main.ts`は無改修で恩恵を受けた。どちらも既に`required_styles`/`optional_styles`をそのまま`MapIntent`に積んで`buildShorthandLink`に渡しており、`#m=`にフォールバックしていたのが自動的に`#q=`(`rstyle=`)に変わる。
+- `scripts/build-gennai-prompt.mjs`(`GENNAI_PROMPT.md`生成)を更新: 「`required_styles`/`optional_styles`はこのリンク形式では表現できないためYAMLを例外的に提示してよい」という節を削除し、`rstyle`/`ostyle`の書き方を`req`/`opt`と同列に説明する形にした。stars-optgeoのvlcm/vbm例・末尾の「北海道の火山土地条件図」ワークド例の両方を、YAMLブロックから`#q=...&rstyle=vlcm|火山土地条件図&ostyle=vbm|火山基本図&...`形式のリンク1本に置き換えた。これによりGENNAI_PROMPT.md自身が「常にリンクだけを提示する」(D18/D19の原則)を、例外なく実現できるようになった。
+
+**この変更で解消するもの・しないもの**: D7が名指しした「`#q=`が表現できない2つのギャップ」(複数カタログ/`required_styles`・`optional_styles`、`sharing_policy`明示的上書き)のうち、`required_styles`/`optional_styles`側だけを解消した。複数カタログと`sharing_policy`明示的上書きは今回のスコープ外で、引き続き`#m=`が必要(`buildShorthandParams`の残る2条件がそのままガードする)。
+
+**検証**: `npm run typecheck && npm test`、`npm run build`。`src/shorthand.test.ts`に`rstyle`/`ostyle`のパース・往復テスト(labelあり・スタイルのみ・レイヤーと混在の各パターン)を追加、旧来「required_styles/optional_stylesがあるとnullを返す」ことを検証していたテストをすべて「`rstyle=`/`ostyle=`として正しく直列化・往復する」ことを検証するテストに置き換えた。`mcp/test/linkBuilder.test.ts`の「required_styles使用時は`#m=`にフォールバックする」テストも、「`#q=`(`rstyle=`)が使われる」テストに更新した。
+
+**Consequences**: `src/shorthand.ts`(`rstyle`/`ostyle`追加、doc comment更新)・`src/shorthand.test.ts`・`mcp/src/linkBuilder.ts`(doc commentのみ)・`mcp/test/linkBuilder.test.ts`・`scripts/build-gennai-prompt.mjs`を変更。`src/types.ts`・`src/catalog.ts`・`src/main.ts`・`src/render.ts`・`openweb/`は無改修。既存の`#q=`リンク(`rstyle`/`ostyle`を含まない)は後方互換のまま動作する。

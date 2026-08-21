@@ -84,6 +84,33 @@ describe('parseShorthandFragment', () => {
     expect(intent!.optional_layers).toEqual([{ source_id: 'x' }]);
   });
 
+  // DECISIONS.md D20: rstyle/ostyle mirror req/opt but resolve to
+  // required_styles/optional_styles (StyleRef, keyed on style_id).
+  it('parses rstyle/ostyle, including style_id|label entries, mixed together with req/opt', () => {
+    const hash =
+      '#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&rstyle=' +
+      encodeURIComponent('vlcm|火山土地条件図') +
+      '&ostyle=vbm';
+    const intent = parseShorthandFragment(hash);
+    expect(intent).not.toBeNull();
+    expect(intent!.required_layers).toEqual([{ source_id: 'seamlessphoto512' }]);
+    expect(intent!.required_styles).toEqual([{ style_id: 'vlcm', label: '火山土地条件図' }]);
+    expect(intent!.optional_styles).toEqual([{ style_id: 'vbm' }]);
+  });
+
+  it('accepts a styles-only intent with no req/opt at all', () => {
+    const intent = parseShorthandFragment('#q=catalog=https://stars.optgeo.org/catalog&type=martin&rstyle=vlcm');
+    expect(intent).not.toBeNull();
+    expect(intent!.required_layers).toBeUndefined();
+    expect(intent!.optional_layers).toBeUndefined();
+    expect(intent!.required_styles).toEqual([{ style_id: 'vlcm' }]);
+  });
+
+  it('returns null when req/opt/rstyle/ostyle are all absent', () => {
+    expect(parseShorthandFragment('#q=catalog=https://example.org/catalog.json')).toBeNull();
+    expect(parseShorthandFragment('#q=catalog=https://example.org/catalog.json&req=&opt=&rstyle=&ostyle=')).toBeNull();
+  });
+
   it('tolerates an unencoded catalog URI (no reserved query characters)', () => {
     const intent = parseShorthandFragment('#q=catalog=https://hfu.github.io/layers-martin/catalog.json&req=lcmfc2');
     expect(intent!.catalog_context.active_catalogs[0].uri).toBe('https://hfu.github.io/layers-martin/catalog.json');
@@ -192,9 +219,29 @@ describe('buildShorthandFragment', () => {
     expect(buildShorthandFragment(intent, live)).toBeNull();
   });
 
-  it('returns null when required_styles/optional_styles are present (no wire representation)', () => {
-    const intent: MapIntent = { ...baseIntent, required_styles: [{ style_id: 'vlcm' }] };
-    expect(buildShorthandFragment(intent, live)).toBeNull();
+  // DECISIONS.md D20: required_styles/optional_styles now round-trip via
+  // rstyle/ostyle, same single-catalog condition as req/opt.
+  it('serializes required_styles/optional_styles via rstyle/ostyle, round-tripping alongside required_layers', () => {
+    const intent: MapIntent = {
+      ...baseIntent,
+      required_styles: [{ style_id: 'vlcm', label: '火山土地条件図' }],
+      optional_styles: [{ style_id: 'vbm' }]
+    };
+    const frag = buildShorthandFragment(intent, live);
+    expect(frag).not.toBeNull();
+    const roundTripped = parseShorthandFragment(frag!);
+    expect(roundTripped!.required_layers).toEqual([{ source_id: 'lcmfc2', label: '治水地形分類図' }]);
+    expect(roundTripped!.required_styles).toEqual([{ style_id: 'vlcm', label: '火山土地条件図' }]);
+    expect(roundTripped!.optional_styles).toEqual([{ style_id: 'vbm' }]);
+  });
+
+  it('serializes a styles-only intent (no required_layers/optional_layers at all)', () => {
+    const intent: MapIntent = { ...baseIntent, required_layers: undefined, required_styles: [{ style_id: 'vlcm' }] };
+    const frag = buildShorthandFragment(intent, live);
+    expect(frag).not.toBeNull();
+    const roundTripped = parseShorthandFragment(frag!);
+    expect(roundTripped!.required_layers).toBeUndefined();
+    expect(roundTripped!.required_styles).toEqual([{ style_id: 'vlcm' }]);
   });
 
   it('returns null for an explicit sharing_policy override (D7: cited as a remaining #m=-only gap)', () => {
@@ -237,8 +284,14 @@ describe('buildShorthandLink', () => {
     expect(roundTripped!.render_hints).toEqual({ center: [130.6, 32.5], zoom: 11 });
   });
 
-  it('returns null under the same fitness conditions as buildShorthandFragment', () => {
-    expect(buildShorthandLink({ ...baseIntent, required_styles: [{ style_id: 'vlcm' }] })).toBeNull();
+  it('builds an rstyle= link for required_styles (D20), unlike the multi-catalog/sharing_policy cases which still fall back to #m=', () => {
+    const link = buildShorthandLink({ ...baseIntent, required_styles: [{ style_id: 'vlcm', label: '火山土地条件図' }] });
+    expect(link).not.toBeNull();
+    const roundTripped = parseShorthandFragment(link!);
+    expect(roundTripped!.required_styles).toEqual([{ style_id: 'vlcm', label: '火山土地条件図' }]);
+  });
+
+  it('returns null under the remaining fitness conditions (multi-catalog, explicit sharing_policy override)', () => {
     expect(
       buildShorthandLink({
         ...baseIntent,

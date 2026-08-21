@@ -1,4 +1,4 @@
-import type { Area, LayerRef, MapIntent, RenderHints } from './types.ts';
+import type { Area, LayerRef, MapIntent, RenderHints, StyleRef } from './types.ts';
 
 // A hand-writable alternative to the compressed #m= format (DECISIONS.md
 // D3), aimed at Staff agents without code execution: no binary encoding at
@@ -27,7 +27,19 @@ import type { Area, LayerRef, MapIntent, RenderHints } from './types.ts';
 //                            so Staff sees one convention, not two.
 //   opt         (optional)  comma-separated optional_layers[*], same
 //                            "source_id" / "source_id|label" entry syntax
-//                            (at least one of req/opt must be non-empty)
+//   rstyle      (optional)  comma-separated required_styles[*], each entry
+//                            either a bare style_id or "style_id|label" --
+//                            same wire shape as req/opt (StyleRef has the
+//                            same "id + optional label" structure as
+//                            LayerRef, DECISIONS.md D20). Only resolvable
+//                            when the single active catalog is a real
+//                            Martin server (catalog_type "martin"); against
+//                            a layers_txt catalog this just resolves to
+//                            "missing" like any other bad id, no special
+//                            validation needed here (at least one of
+//                            req/opt/rstyle/ostyle must be non-empty)
+//   ostyle      (optional)  comma-separated optional_styles[*], same
+//                            "style_id" / "style_id|label" entry syntax
 //   bbox        (optional)  "west,south,east,north"
 //   name        (optional)  area.name
 //   goal        (optional)  free text; if omitted, main.ts synthesizes one
@@ -52,9 +64,14 @@ import type { Area, LayerRef, MapIntent, RenderHints } from './types.ts';
 //                            always recomputed from the live catalog)
 //
 // Deliberately NOT supported here (use #m= instead when needed): multiple
-// catalogs, required_styles/optional_styles, explicit sharing_policy
-// overrides (DECISIONS.md D7 lists this as one of the two remaining gaps,
-// alongside multi-catalog/styles).
+// catalogs, explicit sharing_policy overrides. required_styles/
+// optional_styles were also on this list until D20 added rstyle/ostyle --
+// see DECISIONS.md D7/D8 for the original two-gaps framing and D20 for why
+// closing the styles half turned out to be a small, additive change (D6/D8
+// already resolve required_styles/optional_styles against the *same*
+// active_catalogs array as required_layers/optional_layers -- no separate
+// "style catalog" concept exists to complicate the single-catalog
+// restriction below).
 const HASH_PREFIX = '#q=';
 
 function parseBbox(raw: string | null): [number, number, number, number] | undefined {
@@ -106,6 +123,33 @@ function buildRefEntry(ref: LayerRef): string {
   return ref.label ? `${ref.source_id}|${encodeURIComponent(ref.label)}` : ref.source_id;
 }
 
+// Style-ref counterpart of parseRefEntry/buildRefEntry/parseRefList above --
+// same "id[|label]" wire shape, just keyed on style_id instead of source_id
+// (D20). Kept as separate concrete functions rather than a generalized
+// helper: the two ref shapes are only accidentally similar (LayerRef vs.
+// StyleRef are distinct, non-interchangeable types), and the duplication is
+// three short functions, not worth abstracting over.
+function parseStyleRefEntry(entry: string): StyleRef {
+  const sep = entry.indexOf('|');
+  if (sep === -1) return { style_id: entry };
+  const style_id = entry.slice(0, sep);
+  const rawLabel = entry.slice(sep + 1);
+  if (rawLabel === '') return { style_id };
+  try {
+    return { style_id, label: decodeURIComponent(rawLabel) };
+  } catch {
+    return { style_id, label: rawLabel };
+  }
+}
+
+function parseStyleRefList(raw: string | null): StyleRef[] {
+  return parseIdList(raw).map(parseStyleRefEntry);
+}
+
+function buildStyleRefEntry(ref: StyleRef): string {
+  return ref.label ? `${ref.style_id}|${encodeURIComponent(ref.label)}` : ref.style_id;
+}
+
 function parseNumber(raw: string | null): number | undefined {
   if (raw === null) return undefined;
   const n = Number(raw);
@@ -126,7 +170,11 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
 
   const required = parseRefList(params.get('req'));
   const optional = parseRefList(params.get('opt'));
-  if (required.length === 0 && optional.length === 0) return null;
+  const requiredStyles = parseStyleRefList(params.get('rstyle'));
+  const optionalStyles = parseStyleRefList(params.get('ostyle'));
+  if (required.length === 0 && optional.length === 0 && requiredStyles.length === 0 && optionalStyles.length === 0) {
+    return null;
+  }
 
   const bbox = parseBbox(params.get('bbox'));
   const areaName = params.get('name');
@@ -174,6 +222,8 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
     },
     ...(required.length > 0 ? { required_layers: required } : {}),
     ...(optional.length > 0 ? { optional_layers: optional } : {}),
+    ...(requiredStyles.length > 0 ? { required_styles: requiredStyles } : {}),
+    ...(optionalStyles.length > 0 ? { optional_styles: optionalStyles } : {}),
     ...(renderHints ? { render_hints: renderHints } : {}),
     ...(missing.length > 0 || unrenderable.length > 0
       ? { cartographer_feedback: { missing_layers: missing, unrenderable_layers: unrenderable } }
@@ -192,11 +242,13 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
 // Shared by buildShorthandFragment (live reflection) and buildShorthandLink
 // (cold-start construction, spiccato-mcp): checks whether intent's shape
 // fits within what #q= can represent at all, and if so builds the params
-// common to both (catalog/req/opt/bbox/name/goal). Returns null when the
-// intent falls outside #q='s scope (DECISIONS.md D6/D7) -- callers must
-// fall back to encodeIntentFragment (#m=) in that case:
-//   - more than one active catalog
-//   - any required_styles/optional_styles (no wire representation at all)
+// common to both (catalog/req/opt/rstyle/ostyle/bbox/name/goal). Returns
+// null when the intent falls outside #q='s scope (DECISIONS.md D6/D7/D20)
+// -- callers must fall back to encodeIntentFragment (#m=) in that case:
+//   - more than one active catalog (required_styles/optional_styles
+//     resolve against this same array, per resolveStyles in catalog.ts --
+//     there's no separate "style catalog" to reason about here, so a
+//     single active catalog is the only condition either kind of ref needs)
 //   - an explicit sharing_policy that isn't #q='s own implicit default
 //     ({ url_share: true, intent_share: true }, what parseShorthandFragment
 //     always produces) -- D7 calls this out by name as a case #q= can't
@@ -210,11 +262,14 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
 function buildShorthandParams(intent: MapIntent): URLSearchParams | null {
   const catalogs = intent.catalog_context.active_catalogs;
   if (catalogs.length !== 1) return null;
-  if ((intent.required_styles?.length ?? 0) > 0 || (intent.optional_styles?.length ?? 0) > 0) return null;
 
   const required = intent.required_layers ?? [];
   const optional = intent.optional_layers ?? [];
-  if (required.length === 0 && optional.length === 0) return null;
+  const requiredStyles = intent.required_styles ?? [];
+  const optionalStyles = intent.optional_styles ?? [];
+  if (required.length === 0 && optional.length === 0 && requiredStyles.length === 0 && optionalStyles.length === 0) {
+    return null;
+  }
 
   const policy = intent.sharing_policy;
   if (policy && (policy.url_share !== true || policy.intent_share !== true)) return null;
@@ -224,6 +279,8 @@ function buildShorthandParams(intent: MapIntent): URLSearchParams | null {
   if (catalogs[0].type !== 'layers_txt') params.set('type', catalogs[0].type);
   if (required.length > 0) params.set('req', required.map(buildRefEntry).join(','));
   if (optional.length > 0) params.set('opt', optional.map(buildRefEntry).join(','));
+  if (requiredStyles.length > 0) params.set('rstyle', requiredStyles.map(buildStyleRefEntry).join(','));
+  if (optionalStyles.length > 0) params.set('ostyle', optionalStyles.map(buildStyleRefEntry).join(','));
   if (intent.area?.bbox) params.set('bbox', intent.area.bbox.join(','));
   if (intent.area?.name) params.set('name', intent.area.name);
   if (intent.goal) params.set('goal', intent.goal);

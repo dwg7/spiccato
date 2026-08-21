@@ -96,16 +96,17 @@ Staccatoアーキテクチャ(User/Staff/Cartographer/Library、\`UNopenGIS/stac
 貼り付け不要。Cartographer実装「spiccato」(\`https://dwg7.github.io/spiccato/\`)は、URLに地図の内容を直接埋め込んだリンクを開くだけで描画される。あなたはMap Intentを生成した直後、次の形式でリンクを1本組み立てて提示する(URLは1行のまま、途中で改行・省略しない):
 
 \`\`\`
-https://dwg7.github.io/spiccato/#q=catalog=<カタログURI>&type=<catalog_type>&req=<source_id1[|label1],source_id2[|label2],...>&opt=<任意source_id[|label]>&bbox=<west,south,east,north>&name=<地域名>
+https://dwg7.github.io/spiccato/#q=catalog=<カタログURI>&type=<catalog_type>&req=<source_id1[|label1],source_id2[|label2],...>&opt=<任意source_id[|label]>&rstyle=<style_id1[|label1],...>&ostyle=<任意style_id[|label]>&bbox=<west,south,east,north>&name=<地域名>
 \`\`\`
 
 - \`catalog\`はURLエンコード不要(下記2件のURIをそのまま使う)。
 - \`type\`はカタログ1(layers-martin)を使う場合は省略可(既定\`layers_txt\`)。カタログ2(stars-optgeo)を使う場合は\`type=martin\`を必ず付ける。
-- \`req\`(必須レイヤー)・\`opt\`(任意レイヤー)はカンマ区切り。各エントリは\`source_id\`単体、または\`source_id|label\`(パイプ区切り)。labelを添えると、Cartographer画面のパネルに識別子(例: \`lcmfc2\`)ではなく分かりやすい名前(例: 治水地形分類図)が表示される — 下記カタログ一覧の\`id|name\`と同じ区切り文字なので、\`name\`側をそのままlabelとして使い回せる。**labelに半角カンマ(,)を含めない**こと(含めると、カンマがエントリの区切りと誤認され、後半が別の実在しないレイヤーとして扱われてしまう)。半角カンマを使いたい場合は代わりに読点「、」を使うか、そのエントリだけlabelを省略する。req/optのいずれか一方は必須。
+- \`req\`(必須レイヤー)・\`opt\`(任意レイヤー)はカンマ区切り。各エントリは\`source_id\`単体、または\`source_id|label\`(パイプ区切り)。labelを添えると、Cartographer画面のパネルに識別子(例: \`lcmfc2\`)ではなく分かりやすい名前(例: 治水地形分類図)が表示される — 下記カタログ一覧の\`id|name\`と同じ区切り文字なので、\`name\`側をそのままlabelとして使い回せる。**labelに半角カンマ(,)を含めない**こと(含めると、カンマがエントリの区切りと誤認され、後半が別の実在しないレイヤーとして扱われてしまう)。半角カンマを使いたい場合は代わりに読点「、」を使うか、そのエントリだけlabelを省略する。
+- \`rstyle\`(必須スタイル)・\`ostyle\`(任意スタイル)は、個々のレイヤーでなく完成した主題図そのもの(\`style_id\`、下記「カタログ2」節参照)を参照する場合に使う。書き方・label規則は\`req\`/\`opt\`と全く同じ(カンマ区切り、各エントリ\`style_id\`単体または\`style_id|label\`)。req/opt/rstyle/ostyleのうち最低一つは必須。
 - \`bbox\`は西,南,東,北の順の10進緯度経度。地名から座標へ解決するのはあなたの責務(下記「地域・範囲の解決」参照)。
 - \`goal\`パラメータは省略してよい(省略すると解決後のレイヤー名から自動生成される)。書いてもよい。
 - \`name\`に日本語など非ASCII文字を含める場合、可能ならURLエンコードする。ただし確実にエンコードできる自信が無い場合は、日本語のままでもよい(Cartographer側はどちらの形でも読める)。
-- \`required_styles\`/\`optional_styles\`(個々のレイヤーでなく完成した主題図そのもの)はこのリンク形式では表現できない。**この場合に限り**、下記「stars-optgeo」節のYAML例をそのままMap Intentとして提示してよい(貼り付け先はspiccatoのフォーム)。**それ以外の場合、Map IntentのYAMLテキストは併記しない — リンクだけを提示する**。Map Intentを内部的に組み立てたこと自体は、利用者に見せる情報ではない(上記「応答は利用者(顧客)向けであること」と同じ理由)。
+- Map IntentのYAMLテキストは併記しない — 常にリンクだけを提示する。Map Intentを内部的に組み立てたこと自体は、利用者に見せる情報ではない(上記「応答は利用者(顧客)向けであること」と同じ理由)。
 - リンクを利用者に提示する際は、そのリンクが何を表示するものかを一言添える(例:「石狩川下流域の治水地形分類図と洪水浸水想定区域を表示するリンクです」)。リンクだけが後で単独に残っても、意図が追跡できるようにするため。
 
 これはSTAFF_PROMPT.mdの「正しいやりとりの形」(Map Intentをコピーして貼り付ける)とは異なる、spiccato固有の受け渡し方法である。spiccatoは共有の一次artifactとしてURLも扱う設計になっている(貼り付けと比べて手数が少なく、リンクを1回開くだけで再現できる)。
@@ -147,23 +148,13 @@ ${starsOptgeoList}
 
 - **ラスタ背景地図で用が足りる場合**: spiccatoの既定背景(bvmapグレースケール + Mapterhorn)のままでよい。stars-optgeoを追加する必要は無い。
 - **全国空中写真が必要な場合**: \`japan-seamless-aerial-z18\`(z18のみ)または\`seamlessphoto512\`(z1-17)を通常のsource_idとして使う。
-- **利用者が「北海道の火山土地条件図/火山基本図を見たい」など、完成した主題図そのものを求めている場合**: 公開済みstyle_id \`${starsOptgeoStyleIds.join('`・`')}\` を\`style_id\`として\`required_styles\`/\`optional_styles\`で参照する(道南〜道央限定)。GSI公式凡例に基づき色分け・記号化済みの完成品であり、通常はこちらを優先する。この場合は\`#q=\`ではなくMap IntentのYAMLをそのまま示す:
+- **利用者が「北海道の火山土地条件図/火山基本図を見たい」など、完成した主題図そのものを求めている場合**: 公開済みstyle_id \`${starsOptgeoStyleIds.join('`・`')}\` を\`rstyle\`/\`ostyle\`で参照する(道南〜道央限定)。GSI公式凡例に基づき色分け・記号化済みの完成品であり、通常はこちらを優先する:
 
-\`\`\`yaml
-spec_version: "map-intent/v2"
-goal: "北海道の火山土地条件図を示す。"
-area: {name: "<地名>", bbox: [<west>, <south>, <east>, <north>]}
-catalog_context:
-  active_catalogs:
-    - {id: "stars-optgeo", type: "martin", uri: "${STARS_OPTGEO_CATALOG_URL}"}
-required_styles:
-  - {style_id: "vlcm", label: "火山土地条件図"}
-optional_styles:
-  - {style_id: "vbm", label: "火山基本図"}
-provenance: {generated_by: "gennai", generated_at: "<ISO8601>", intent_id: "<uuid>"}
+\`\`\`
+https://dwg7.github.io/spiccato/#q=catalog=${STARS_OPTGEO_CATALOG_URL}&type=martin&rstyle=vlcm|火山土地条件図&ostyle=vbm|火山基本図&bbox=<west,south,east,north>&name=<地名>
 \`\`\`
 
-\`area.bbox\`を省略すると全国表示(ズーム5相当)になってしまう。\`required_styles\`のみのMap Intentでも\`bbox\`は必ず埋めること。\`provenance.generated_at\`は、利用可能な現在日時を確信を持って把握できる場合のみISO8601で埋める。現在日時を確信できない場合は省略してよい(誤った日時を書くより省略する方が安全)。
+\`bbox\`を省略すると全国表示(ズーム5相当)になってしまう。\`rstyle\`/\`ostyle\`のみのリンクでも\`bbox\`は必ず埋めること。
 
 ## 地域・範囲の解決はあなたの責務
 
@@ -185,7 +176,11 @@ https://dwg7.github.io/spiccato/#q=catalog=${LAYERS_MARTIN_CATALOG_URL}&req=05_d
 https://dwg7.github.io/spiccato/#q=catalog=${LAYERS_MARTIN_CATALOG_URL}&req=lcmfc2|治水地形分類図,01_flood_l2_shinsuishin_data|洪水浸水想定区域&bbox=141.25,43.0,141.85,43.4&name=石狩川下流域
 \`\`\`
 
-利用者「北海道の火山土地条件図を見たい」→ 上記「カタログ2」節のYAML例(\`required_styles: [vlcm]\`)をそのまま提示する(#q=では表現できないため)。
+利用者「北海道の火山土地条件図を見たい」→
+
+\`\`\`
+https://dwg7.github.io/spiccato/#q=catalog=${STARS_OPTGEO_CATALOG_URL}&type=martin&rstyle=vlcm|火山土地条件図&bbox=<west,south,east,north>&name=<対象地域>
+\`\`\`
 `;
 }
 

@@ -17,13 +17,14 @@ describe('buildSpiccatoLink', () => {
     expect(result.url).not.toContain('goal='); // omitted goal should stay omitted, not encoded as empty
   });
 
-  it('falls back to #m= when required_styles is used', async () => {
+  it('builds a short #q= link (rstyle=) for a single catalog with only required_styles (DECISIONS.md D20)', async () => {
     const result = await buildSpiccatoLink({
       catalogs: [{ id: 'stars-optgeo', type: 'martin', uri: STARS_OPTGEO }],
       required_styles: [{ style_id: 'vlcm', label: '火山土地条件図' }]
     });
-    expect(result.format).toBe('m');
-    expect(result.url.startsWith('https://dwg7.github.io/spiccato/#m=')).toBe(true);
+    expect(result.format).toBe('q');
+    expect(result.url.startsWith('https://dwg7.github.io/spiccato/#q=')).toBe(true);
+    expect(result.url).toContain('rstyle=vlcm');
   });
 
   it('falls back to #m= when more than one catalog is given', async () => {

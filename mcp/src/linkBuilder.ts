@@ -29,10 +29,11 @@ export interface BuildLinkParams {
 export interface BuildLinkResult {
   url: string;
   // Which wire format was actually used. "q" is always preferred when the
-  // intent's shape fits (single catalog, no styles, default sharing_policy
-  // -- see buildShorthandLink's own doc comment in shorthand.ts); "m" is the
-  // fallback for multi-catalog/required_styles/optional_styles intents,
-  // mirroring render.ts's updateFragment (D8).
+  // intent's shape fits (single catalog, default sharing_policy -- see
+  // buildShorthandLink's own doc comment in shorthand.ts; required_styles/
+  // optional_styles fit too as of D20, via rstyle=/ostyle=); "m" is the
+  // fallback for multi-catalog intents or an explicit sharing_policy
+  // override, mirroring render.ts's updateFragment (D8).
   format: 'q' | 'm';
 }
 
