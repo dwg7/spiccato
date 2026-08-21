@@ -493,3 +493,17 @@ Staccatoアーキテクチャの4者モデル(User/Staff/Cartographer/Library)�
 **検証**: `npm run typecheck && npm test`、`npm run build`。`src/shorthand.test.ts`に`rstyle`/`ostyle`のパース・往復テスト(labelあり・スタイルのみ・レイヤーと混在の各パターン)を追加、旧来「required_styles/optional_stylesがあるとnullを返す」ことを検証していたテストをすべて「`rstyle=`/`ostyle=`として正しく直列化・往復する」ことを検証するテストに置き換えた。`mcp/test/linkBuilder.test.ts`の「required_styles使用時は`#m=`にフォールバックする」テストも、「`#q=`(`rstyle=`)が使われる」テストに更新した。
 
 **Consequences**: `src/shorthand.ts`(`rstyle`/`ostyle`追加、doc comment更新)・`src/shorthand.test.ts`・`mcp/src/linkBuilder.ts`(doc commentのみ)・`mcp/test/linkBuilder.test.ts`・`scripts/build-gennai-prompt.mjs`を変更。`src/types.ts`・`src/catalog.ts`・`src/main.ts`・`src/render.ts`・`openweb/`は無改修。既存の`#q=`リンク(`rstyle`/`ostyle`を含まない)は後方互換のまま動作する。
+
+## D21: Cartographer画面(地図ビュー)のパネルから「Spiccato」の表示を外す
+
+**Status**: Accepted
+
+**Context**: `dwg7/chukei`との共用を見据えたユーザーからの指摘。地図描画後のパネル(`src/render.ts`の`renderMapView`)の見出しが常に固定文字列`<h1>Spiccato</h1>`になっており、その直下に実際のgoalが`<p>`で表示されていた。利用者(Chukei経由であれば非技術系の道庁職員)にとって、この「Spiccato」という製品名は認知負荷になるだけで意味を持たない情報である。これは`hfu/faceless-cartographer`のIssue #4で既に踏んだ判断(コードネーム`faceless-cartographer`をUI上に出さず、利用者向けの名前に差し替える)と同じ方向性で、Cartographer実装の内部名を利用者に見せる必要は無いという原則の延長線上にある。
+
+**Decision**: `<h1>Spiccato</h1>`と`<p>${goal}</p>`の2行を、`<h1>${goal}</h1>`の1行に統合した。既存の`.panel h1`(index.htmlのインラインstyle、`font-size: 1rem; margin: 0 0 .4rem;`)をそのまま流用でき、新規CSSは不要。副次的な効果として、地図ビューの見出しが常に固定の"Spiccato"だった状態から、その地図が何を表示しているか(goal)を表す動的な見出しになり、アクセシビリティ上のh1の意味(ページの主題を表す)にもより忠実になった。
+
+貼り付けフォーム側(`renderFormView`の`<h1>Spiccato</h1>`、`src/render.ts`の別の箇所)は今回のスコープ外 — そちらはspiccato自身のランディングページであり、Chukei利用者が直接見る画面ではないため変更していない。
+
+**検証**: `npm run typecheck && npm test`(既存テストに`<h1>`やSpiccato文字列への依存は無く、無変更で全通過)、`npm run build`。本番相当ビルドで実際に`#q=`リンクを開き、パネル上部が「Spiccato」ではなくgoalのテキスト(例:「治水地形分類図 を表示。」)になっていることを確認した。
+
+**Consequences**: `src/render.ts`のみ変更(2行→1行)。CSSの追加・削除は無し(既存の`.panel h1`ルールを再利用)。`src/render.ts`のformView側の`<h1>Spiccato</h1>`は変更していない。

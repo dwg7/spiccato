@@ -390,8 +390,7 @@ export function renderMapView(
       </svg>
     </button>
     <div class="panel__content">
-      <h1>Spiccato</h1>
-      <p>${escapeHtml(intent.goal)}</p>
+      <h1>${escapeHtml(intent.goal)}</h1>
       ${missingNotice}
       ${unrenderableNotice}
       ${urlShareAdvisory}
