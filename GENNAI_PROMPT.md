@@ -1754,14 +1754,15 @@ vlcd_zao|蔵王山
 
 ## カタログ2: stars-optgeo(catalog=`https://stars.optgeo.org/catalog`、`type=martin`)
 
-以下は全source_id(8件)。通常の`#q=`形式で使える(例: `...#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&bbox=...`):
+以下は全source_id(9件)。通常の`#q=`形式で使える(例: `...#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&bbox=...`):
 
 ```text
 bvmap|output/tiles-5000k.mbtiles + output/tiles-1000k.mbtiles + output/tiles-200k.mbtiles + output/tiles-25k.mbtiles
 freetown-mapterhorn|
-japan|
 japan-seamless-aerial-z18|GSI seamlessphoto z18
 kitaphoto|
+kitaphoto17|
+mapterhorn-japan-bridge|
 seamlessphoto512|GSI seamlessphoto 512px (z1-z17)
 vbm|Hokkaido VBM
 vlcm|Hokkaido VLCM
