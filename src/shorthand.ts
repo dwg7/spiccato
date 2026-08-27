@@ -40,6 +40,14 @@ import type { Area, LayerRef, MapIntent, RenderHints, StyleRef } from './types.t
 //                            req/opt/rstyle/ostyle must be non-empty)
 //   ostyle      (optional)  comma-separated optional_styles[*], same
 //                            "style_id" / "style_id|label" entry syntax
+//   basemap     (optional)  a single style_id or "style_id|label" (D22) --
+//                            replaces the vendored bvmap default with a
+//                            whole published style, e.g. for an area
+//                            outside bvmap's Japan-only coverage. Not a
+//                            comma-separated list like rstyle/ostyle (only
+//                            one basemap can be active); doesn't count
+//                            toward the req/opt/rstyle/ostyle "at least one"
+//                            requirement on its own
 //   bbox        (optional)  "west,south,east,north"
 //   name        (optional)  area.name
 //   goal        (optional)  free text; if omitted, main.ts synthesizes one
@@ -176,6 +184,14 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
     return null;
   }
 
+  // D22: basemap is a single StyleRef, not a list -- same "style_id[|label]"
+  // entry syntax as one rstyle/ostyle entry, just not comma-joined. Doesn't
+  // count toward the "at least one of req/opt/rstyle/ostyle" guard above: a
+  // basemap with nothing else to show would be an empty map with just a
+  // background, not a useful #q= link on its own.
+  const basemapRaw = params.get('basemap');
+  const basemap = basemapRaw ? parseStyleRefEntry(basemapRaw) : undefined;
+
   const bbox = parseBbox(params.get('bbox'));
   const areaName = params.get('name');
   const goal = params.get('goal');
@@ -224,6 +240,7 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
     ...(optional.length > 0 ? { optional_layers: optional } : {}),
     ...(requiredStyles.length > 0 ? { required_styles: requiredStyles } : {}),
     ...(optionalStyles.length > 0 ? { optional_styles: optionalStyles } : {}),
+    ...(basemap ? { basemap } : {}),
     ...(renderHints ? { render_hints: renderHints } : {}),
     ...(missing.length > 0 || unrenderable.length > 0
       ? { cartographer_feedback: { missing_layers: missing, unrenderable_layers: unrenderable } }
@@ -242,13 +259,14 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
 // Shared by buildShorthandFragment (live reflection) and buildShorthandLink
 // (cold-start construction, spiccato-mcp): checks whether intent's shape
 // fits within what #q= can represent at all, and if so builds the params
-// common to both (catalog/req/opt/rstyle/ostyle/bbox/name/goal). Returns
-// null when the intent falls outside #q='s scope (DECISIONS.md D6/D7/D20)
-// -- callers must fall back to encodeIntentFragment (#m=) in that case:
-//   - more than one active catalog (required_styles/optional_styles
-//     resolve against this same array, per resolveStyles in catalog.ts --
-//     there's no separate "style catalog" to reason about here, so a
-//     single active catalog is the only condition either kind of ref needs)
+// common to both (catalog/req/opt/rstyle/ostyle/basemap/bbox/name/goal).
+// Returns null when the intent falls outside #q='s scope (DECISIONS.md
+// D6/D7/D20/D22) -- callers must fall back to encodeIntentFragment (#m=) in
+// that case:
+//   - more than one active catalog (required_styles/optional_styles/basemap
+//     all resolve against this same array, per resolveStyles/resolveBasemap
+//     in catalog.ts -- there's no separate "style catalog" to reason about
+//     here, so a single active catalog is the only condition any of them needs)
 //   - an explicit sharing_policy that isn't #q='s own implicit default
 //     ({ url_share: true, intent_share: true }, what parseShorthandFragment
 //     always produces) -- D7 calls this out by name as a case #q= can't
@@ -281,6 +299,7 @@ function buildShorthandParams(intent: MapIntent): URLSearchParams | null {
   if (optional.length > 0) params.set('opt', optional.map(buildRefEntry).join(','));
   if (requiredStyles.length > 0) params.set('rstyle', requiredStyles.map(buildStyleRefEntry).join(','));
   if (optionalStyles.length > 0) params.set('ostyle', optionalStyles.map(buildStyleRefEntry).join(','));
+  if (intent.basemap) params.set('basemap', buildStyleRefEntry(intent.basemap));
   if (intent.area?.bbox) params.set('bbox', intent.area.bbox.join(','));
   if (intent.area?.name) params.set('name', intent.area.name);
   if (intent.goal) params.set('goal', intent.goal);

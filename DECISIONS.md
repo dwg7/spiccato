@@ -507,3 +507,29 @@ Staccatoアーキテクチャの4者モデル(User/Staff/Cartographer/Library)�
 **検証**: `npm run typecheck && npm test`(既存テストに`<h1>`やSpiccato文字列への依存は無く、無変更で全通過)、`npm run build`。本番相当ビルドで実際に`#q=`リンクを開き、パネル上部が「Spiccato」ではなくgoalのテキスト(例:「治水地形分類図 を表示。」)になっていることを確認した。
 
 **Consequences**: `src/render.ts`のみ変更(2行→1行)。CSSの追加・削除は無し(既存の`.panel h1`ルールを再利用)。`src/render.ts`のformView側の`<h1>Spiccato</h1>`は変更していない。
+
+## D22: Map Intentに明示的な`basemap`フィールドを追加し、bvmapのカバレッジ外(日本国外)でも背景地図を選べるようにする
+
+**Status**: Accepted
+
+**Context**: `buildStyle()`は常に無条件で`src/base-style.json`(GSI最適化ベクトルタイル`bvmap`、日本限定データ)を背景地図としてマージしており、Map Intentの内容に関わらずこれを差し替える手段が無かった。`bvmap`は日本国外にタイルを持たないため、日本国外を対象とするMap Intentでは実質使い物にならない背景(何も描画されない)しか出せない。
+
+**却下した代替案**: 当初案は「`area.bbox`が日本国外に出ていたらCartographer側でジオメトリ判定して自動的にbasemapを切り替える」というもの。ユーザー(hfu、本セッションはこの設計判断が別途決まった上での実装依頼として引き継がれたもの)がこれを却下した。理由: Map Intentを生成するStaffロールは、利用者の実際の問い合わせ内容から「これは国内向けか海外向けか」を既に把握している — Cartographerが受け取った後のbboxから逆算するより、遥かに信頼できるシグナルである。したがって判断はMap Intent(Staffの出力)に属するべきで、Cartographerは`basemap`が指定されていればそれを、無ければ既定を描画するだけに徹する(ジオメトリ判定・ヒューリスティックをCartographer側に一切持ち込まない)。
+
+**Decision**:
+
+1. **`MapIntent.basemap?: StyleRef`を追加**(`src/types.ts`)。`required_styles`/`optional_styles`が既に使っている`StyleRef`型をそのまま再利用(新規型は起こさない)、`catalog_context.active_catalogs`に対する解決方法も同一。
+2. **`basemap`未指定時は現状の挙動を完全維持**: 引き続き`base-style.json`(vendored、ネットワーク依存ゼロ)を使う。既定ケースをfetch経由にルーティングし直すことはしていない — vendoringした目的(信頼性)を後退させないため。
+3. **`basemap`指定時**: 既存のスタイル取得機構(`catalog.ts`の`fetchStyle`、`required_styles`/`optional_styles`が使っているのと同じMartinカタログの`/style/{id}`エンドポイント)経由で新設`resolveBasemap()`が解決し、その`sources`/`layers`(+`glyphs`/`sprite`/`terrain`)を`base-style.json`の代わりにまるごと使う。`required_styles`/`optional_styles`のように`base-style.json`の`before`/`after`区間に差し込むのではなく、完全に独立した自己完結スタイルとして扱う(マージ不要、そのまま使うだけ)。この方針により、`contours`(Mapterhorn地形に紐づく等高線)も`basemap`指定時は使わない — 任意の公開スタイルが必ずしも地形データを持つとは限らないため。
+4. **`#q=`への`basemap=<style_id>[|label]`追加**(`src/shorthand.ts`): `rstyle`/`ostyle`と同じワイヤーフォーマット(パイプ区切りlabel)だが、複数値を取らない単一の`StyleRef`(カンマ区切りリストではない)。既存の`catalog=`/`type=`をそのまま使う — basemap専用の別カタログという概念は導入していない(`resolveBasemap`も`resolveStyles`と同じ`active_catalogs`を見るだけ)。`req`/`opt`/`rstyle`/`ostyle`の「最低一つ非空」というガード条件には`basemap`単体を算入しない(背景だけのMap Intentは想定していない)。
+5. **実装中に見つかった副次的な問題を合わせて修正**: パネルの「背景地図(bvmap)を表示」チェックボックス(D9)が`basemap`指定時にも無条件で表示されており、`bvmap`という存在しないsource_idへのトグルとして実質no-opになっていた(実害は無いが、実際に表示されているのはbvmapではないのに「bvmapを表示」というラベルが残る、利用者に誤解を与えるUI)。`intent.basemap`が真のときはこのチェックボックス自体を出さないよう`src/render.ts`を修正した(`basemap`未指定時の表示は変更なし)。
+
+**テスト対象として実在するbasemap**: `stars-optgeo`カタログ(`https://stars.optgeo.org/catalog`、`type=martin`)の`openstreetmap_jp_planet` — 全世界(z0-14、planet全体のbounds)・グレースケール・日本語ラベル付きのOpenMapTilesスキーマスタイル。タイル`https://stars.optgeo.org/openstreetmap_jp_planet/{z}/{x}/{y}`、スタイル`https://stars.optgeo.org/style/openstreetmap_jp_planet`(15レイヤー、`sources.openmaptiles`)、両方とも実在・実機確認済み。
+
+**検証**: `npm run typecheck && npm test`(122件、既存110件は無変更のまま全通過、basemap関連12件を新規追加)、`npm run build`。本番相当ビルドで2パターンを実機確認:
+- 既存の(`basemap`無し)`#q=`リンク(石狩川下流域・治水地形分類図): 従来通り`bvmap`+Mapterhorn地形、「背景地図(bvmap)を表示」チェックボックスも従来通り表示。リグレッション無し。
+- 新規の`basemap=openstreetmap_jp_planet`リンク(パリのbbox、`bvmap`のカバレッジ外): `bvmap`/`mapterhorn`を含まない背景に切り替わり、attributionも`© OpenMapTiles © OpenStreetMap contributors`に切り替わる。「背景地図(bvmap)を表示」チェックボックスは非表示。`#q=`のライブ反映(D8)で`basemap=`も`lat=`/`lng=`等と一緒に正しく往復することを確認。
+
+両パターンともコンソールエラー無し。
+
+**Consequences**: `src/types.ts`(`basemap`フィールド追加)・`src/catalog.ts`(`resolveBasemap`新設)・`src/style.ts`(`buildStyle`に`resolvedBasemap`引数追加、既定値`null`)・`src/main.ts`(`resolveBasemap`呼び出し・`buildStyle`への受け渡し)・`src/render.ts`(bvmapチェックボックスの条件表示)・`src/shorthand.ts`(`basemap=`パラメータ)を変更。対応するテスト(`catalog.test.ts`/`style.test.ts`/`shorthand.test.ts`)を追加。`src/mapIntent.ts`(D1のvendoring境界)・`src/normalizeIntent.ts`・`mcp/`・`worker/`・`openweb/`は無改修 — MCPサーバー/オープンウェブスタイルから`basemap`を組み立てる導線は今回のスコープ外(明示的な指示が無かったため見送り)。`required_styles`/`optional_styles`の挙動・`base-style.json`自体は無変更。

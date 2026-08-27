@@ -260,6 +260,61 @@ describe('buildStyle with resolved styles (D39)', () => {
   });
 });
 
+// D22: an explicit Map Intent `basemap` replaces the vendored
+// base-style.json/bvmap default entirely with a whole published style.
+describe('buildStyle with a resolved basemap (D22)', () => {
+  function resolvedBasemap(styleId: string, extra: Partial<ResolvedStyle['style']> = {}): ResolvedStyle {
+    return {
+      style_id: styleId,
+      required: true,
+      catalog_id: 'stars-optgeo',
+      style: {
+        version: 8,
+        sources: { [styleId]: { type: 'vector', tiles: [`https://e/${styleId}/{z}/{x}/{y}`] } },
+        layers: [{ id: `${styleId}-bg`, type: 'background' }],
+        glyphs: `https://e/${styleId}/fonts/{fontstack}/{range}.pbf`,
+        ...extra
+      }
+    };
+  }
+
+  it('keeps today\'s bvmap default when no basemap is given (regression guard)', () => {
+    const { style } = buildStyle(intent, [], [], null);
+    expect(Object.keys(style.sources)).toEqual(expect.arrayContaining(['bvmap', 'mapterhorn']));
+    expect(style.glyphs).toContain('gsi-cyberjapan');
+    expect(style.terrain).toBeDefined();
+  });
+
+  it('replaces bvmap/mapterhorn entirely with the resolved basemap\'s sources/glyphs/sprite/terrain', () => {
+    const rb = resolvedBasemap('openstreetmap_jp_planet');
+    const { style } = buildStyle({ ...intent, required_layers: [], optional_layers: [] }, [], [], rb);
+
+    expect(style.sources.bvmap).toBeUndefined();
+    expect(style.sources.mapterhorn).toBeUndefined();
+    expect(style.sources.openstreetmap_jp_planet).toBeDefined();
+    expect(style.glyphs).toBe('https://e/openstreetmap_jp_planet/fonts/{fontstack}/{range}.pbf');
+    // This basemap fixture declares neither -- both should come through as
+    // absent, not silently fall back to base-style.json's own values.
+    expect(style.sprite).toBeUndefined();
+    expect(style.terrain).toBeUndefined();
+  });
+
+  it('appends thematic layers after the basemap\'s own layers, with no before/after/contours splicing', () => {
+    const rb = resolvedBasemap('openstreetmap_jp_planet');
+    const resolvedLayers: ResolvedLayer[] = [
+      { source_id: 'std', required: true, catalog_id: 'x', tilejson: tilejson(['https://e/std/{z}/{x}/{y}.png']) }
+    ];
+    const { style } = buildStyle({ ...intent, required_layers: [{ source_id: 'std' }], optional_layers: [] }, resolvedLayers, [], rb);
+
+    const bgIdx = style.layers.findIndex((l) => l.id === 'openstreetmap_jp_planet-bg');
+    const stdIdx = style.layers.findIndex((l) => l.id === 'std');
+    expect(bgIdx).toBe(0); // basemap's own layers come first, unmodified
+    expect(stdIdx).toBeGreaterThan(bgIdx);
+    // None of base-style.json's own bvmap/road layers should be present.
+    expect(style.layers.some((l) => ((l as Record<string, unknown>).id as string)?.startsWith('bvmap'))).toBe(false);
+  });
+});
+
 describe('computeInitialView', () => {
   it('prefers render_hints when present', () => {
     const withHints: MapIntent = { ...intent, render_hints: { center: [140, 40], zoom: 8 } };

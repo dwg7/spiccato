@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resolveLayers, resolveStyles } from './catalog.ts';
+import { resolveLayers, resolveStyles, resolveBasemap } from './catalog.ts';
 import type { MapIntent } from './types.ts';
 
 // These hit the real hfu/layers-martin catalog over the network, by design --
@@ -195,6 +195,54 @@ describe('resolveStyles (integration, live stars.optgeo.org catalog)', () => {
 
     expect(missing).toEqual(['vlcm']);
     expect(resolved).toEqual([]);
+  }, 20000);
+});
+
+// D22: `basemap` is a single StyleRef, resolved the same way as
+// required_styles/optional_styles but via its own function since it isn't
+// an array.
+function intentWithBasemap(catalog: { id: string; type: string; uri: string }, styleId?: string): MapIntent {
+  return {
+    spec_version: 'map-intent/v2',
+    goal: 'test basemap',
+    catalog_context: { active_catalogs: [catalog] },
+    required_layers: [{ source_id: 'placeholder' }],
+    ...(styleId ? { basemap: { style_id: styleId } } : {}),
+    provenance: { generated_by: 'test', generated_at: '2026-08-21T00:00:00Z', intent_id: 'test' }
+  } as MapIntent;
+}
+
+describe('resolveBasemap (integration, live stars.optgeo.org catalog)', () => {
+  it('returns null/null when the intent has no basemap at all', async () => {
+    const intent = intentWithBasemap({ id: 'stars-optgeo', type: 'martin', uri: 'https://stars.optgeo.org/catalog' });
+    const { resolved, missing } = await resolveBasemap(intent);
+    expect(resolved).toBeNull();
+    expect(missing).toBeNull();
+  });
+
+  it('resolves the real, live openstreetmap_jp_planet basemap style', async () => {
+    const intent = intentWithBasemap(
+      { id: 'stars-optgeo', type: 'martin', uri: 'https://stars.optgeo.org/catalog' },
+      'openstreetmap_jp_planet'
+    );
+    const { resolved, missing } = await resolveBasemap(intent);
+
+    expect(missing).toBeNull();
+    expect(resolved).not.toBeNull();
+    expect(resolved!.style_id).toBe('openstreetmap_jp_planet');
+    expect(resolved!.style.sources.openmaptiles).toBeDefined();
+    expect(resolved!.style.layers.length).toBeGreaterThan(0);
+  }, 20000);
+
+  it('reports a fabricated basemap style_id as missing rather than fabricating a result', async () => {
+    const intent = intentWithBasemap(
+      { id: 'stars-optgeo', type: 'martin', uri: 'https://stars.optgeo.org/catalog' },
+      'this_style_id_does_not_exist_12345'
+    );
+    const { resolved, missing } = await resolveBasemap(intent);
+
+    expect(resolved).toBeNull();
+    expect(missing).toBe('this_style_id_does_not_exist_12345');
   }, 20000);
 });
 

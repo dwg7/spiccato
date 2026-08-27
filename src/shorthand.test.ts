@@ -111,6 +111,30 @@ describe('parseShorthandFragment', () => {
     expect(parseShorthandFragment('#q=catalog=https://example.org/catalog.json&req=&opt=&rstyle=&ostyle=')).toBeNull();
   });
 
+  // DECISIONS.md D22: basemap is a single StyleRef (not comma-separated like
+  // rstyle/ostyle), same "style_id|label" entry syntax.
+  it('parses basemap with a label, alongside req', () => {
+    const hash =
+      '#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&basemap=' +
+      encodeURIComponent('openstreetmap_jp_planet|OSM');
+    const intent = parseShorthandFragment(hash);
+    expect(intent!.basemap).toEqual({ style_id: 'openstreetmap_jp_planet', label: 'OSM' });
+    expect(intent!.required_layers).toEqual([{ source_id: 'seamlessphoto512' }]);
+  });
+
+  it('parses a bare basemap (no label)', () => {
+    const intent = parseShorthandFragment(
+      '#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&basemap=openstreetmap_jp_planet'
+    );
+    expect(intent!.basemap).toEqual({ style_id: 'openstreetmap_jp_planet' });
+  });
+
+  it('omits basemap when absent, and does not let basemap alone satisfy the req/opt/rstyle/ostyle guard', () => {
+    const withoutBasemap = parseShorthandFragment('#q=catalog=https://example.org/catalog.json&req=a');
+    expect(withoutBasemap!.basemap).toBeUndefined();
+    expect(parseShorthandFragment('#q=catalog=https://example.org/catalog.json&basemap=openstreetmap_jp_planet')).toBeNull();
+  });
+
   it('tolerates an unencoded catalog URI (no reserved query characters)', () => {
     const intent = parseShorthandFragment('#q=catalog=https://hfu.github.io/layers-martin/catalog.json&req=lcmfc2');
     expect(intent!.catalog_context.active_catalogs[0].uri).toBe('https://hfu.github.io/layers-martin/catalog.json');
@@ -244,6 +268,27 @@ describe('buildShorthandFragment', () => {
     expect(roundTripped!.required_styles).toEqual([{ style_id: 'vlcm' }]);
   });
 
+  // DECISIONS.md D22: basemap round-trips via a single basemap= entry,
+  // alongside required_layers and required_styles/optional_styles.
+  it('serializes basemap via basemap=, round-tripping alongside required_layers and required_styles', () => {
+    const intent: MapIntent = {
+      ...baseIntent,
+      required_styles: [{ style_id: 'vlcm' }],
+      basemap: { style_id: 'openstreetmap_jp_planet', label: 'OSM' }
+    };
+    const frag = buildShorthandFragment(intent, live);
+    expect(frag).not.toBeNull();
+    const roundTripped = parseShorthandFragment(frag!);
+    expect(roundTripped!.basemap).toEqual({ style_id: 'openstreetmap_jp_planet', label: 'OSM' });
+    expect(roundTripped!.required_layers).toEqual([{ source_id: 'lcmfc2', label: '治水地形分類図' }]);
+    expect(roundTripped!.required_styles).toEqual([{ style_id: 'vlcm' }]);
+  });
+
+  it('omits basemap= entirely when the intent has no basemap', () => {
+    const frag = buildShorthandFragment(baseIntent, live);
+    expect(frag).not.toContain('basemap=');
+  });
+
   it('returns null for an explicit sharing_policy override (D7: cited as a remaining #m=-only gap)', () => {
     const intent: MapIntent = { ...baseIntent, sharing_policy: { url_share: false, intent_share: true } };
     expect(buildShorthandFragment(intent, live)).toBeNull();
@@ -289,6 +334,14 @@ describe('buildShorthandLink', () => {
     expect(link).not.toBeNull();
     const roundTripped = parseShorthandFragment(link!);
     expect(roundTripped!.required_styles).toEqual([{ style_id: 'vlcm', label: '火山土地条件図' }]);
+  });
+
+  it('builds a basemap= link (D22), e.g. spiccato-mcp constructing a link for an area outside bvmap coverage', () => {
+    const link = buildShorthandLink({ ...baseIntent, basemap: { style_id: 'openstreetmap_jp_planet', label: 'OSM' } });
+    expect(link).not.toBeNull();
+    const roundTripped = parseShorthandFragment(link!);
+    expect(roundTripped!.basemap).toEqual({ style_id: 'openstreetmap_jp_planet', label: 'OSM' });
+    expect(roundTripped!.required_layers).toEqual([{ source_id: 'lcmfc2' }]);
   });
 
   it('returns null under the remaining fitness conditions (multi-catalog, explicit sharing_policy override)', () => {

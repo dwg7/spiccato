@@ -1,6 +1,6 @@
 import { parseMapIntent } from './mapIntent.ts';
 import { normalizeIntent } from './normalizeIntent.ts';
-import { resolveLayers, resolveStyles } from './catalog.ts';
+import { resolveLayers, resolveStyles, resolveBasemap } from './catalog.ts';
 import { buildStyle, computeInitialView } from './style.ts';
 import { renderFormView, renderMapView } from './render.ts';
 import { decodeIntentFragment } from './fragment.ts';
@@ -31,11 +31,12 @@ function showForm(opts: { prefill?: string; error?: string } = {}) {
 // preserve; it's synthesized here (after goal synthesis below) instead of
 // upfront, so "Copy Map Intent" reflects the same goal text the panel shows.
 async function renderIntent(intent: MapIntent, rawIntent: string | null): Promise<void> {
-  const [{ resolved, missing: missingLayers }, { resolved: resolvedStyles, missing: missingStyles }] = await Promise.all([
-    resolveLayers(intent),
-    resolveStyles(intent)
-  ]);
-  const missing = [...missingLayers, ...missingStyles];
+  const [
+    { resolved, missing: missingLayers },
+    { resolved: resolvedStyles, missing: missingStyles },
+    { resolved: resolvedBasemap, missing: missingBasemap }
+  ] = await Promise.all([resolveLayers(intent), resolveStyles(intent), resolveBasemap(intent)]);
+  const missing = [...missingLayers, ...missingStyles, ...(missingBasemap ? [missingBasemap] : [])];
 
   // An empty goal (always true for shorthand-constructed intents, D6;
   // possible but unusual for a pasted/decoded one too) gets a readable
@@ -50,7 +51,7 @@ async function renderIntent(intent: MapIntent, rawIntent: string | null): Promis
     intent.goal = names.length > 0 ? `${names.join('、')} を表示。` : '(表示するレイヤーが指定されていません)';
   }
 
-  const { style, unrenderable, styleLayerIds, clickableLayerIds } = buildStyle(intent, resolved, resolvedStyles);
+  const { style, unrenderable, styleLayerIds, clickableLayerIds } = buildStyle(intent, resolved, resolvedStyles, resolvedBasemap);
   const view = computeInitialView(intent, resolved);
 
   renderMapView(app!, {

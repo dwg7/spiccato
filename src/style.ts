@@ -97,12 +97,22 @@ function buildVectorSubLayers(sourceId: string, vectorLayers: VectorLayerDescrip
 // Thematic layers (from Map Intent required_layers/optional_layers) are inserted
 // between baseStyle.before (background + hillshade) and baseStyle.after (roads/labels),
 // matching the insertion point where kitavolca places VBM/VLCM data.
+//
+// D22: when the Map Intent's `basemap` resolves, it *replaces* the vendored
+// base-style.json entirely rather than being merged into it -- resolvedBasemap
+// is a whole, self-contained published style (its own sources/layers/glyphs/
+// sprite/terrain), not something that slots into base-style.json's before/
+// after split the way required_styles/optional_styles do into the thematic
+// band. base-style.json/bvmap stays the zero-network-dependency default when
+// resolvedBasemap is absent -- see DECISIONS.md D22 for why the default path
+// must not regress into a fetch.
 export function buildStyle(
   intent: MapIntent,
   resolved: ResolvedLayer[],
-  resolvedStyles: ResolvedStyle[] = []
+  resolvedStyles: ResolvedStyle[] = [],
+  resolvedBasemap: ResolvedStyle | null = null
 ): { style: MapLibreStyle; unrenderable: string[]; styleLayerIds: Record<string, string[]>; clickableLayerIds: string[] } {
-  const sources: MapLibreStyle['sources'] = { ...baseStyle.sources };
+  const sources: MapLibreStyle['sources'] = resolvedBasemap ? { ...resolvedBasemap.style.sources } : { ...baseStyle.sources };
   const thematicLayers: MapLibreStyle['layers'] = [];
   const unrenderable: string[] = [];
   // Layer ids with real feature properties behind them (D41: feature-click
@@ -231,13 +241,16 @@ export function buildStyle(
     styleLayerIds[styleId] = ids;
   }
 
+  // D22: a resolved basemap is a complete style already (background through
+  // labels in one flat array) -- there's no before/after split to insert
+  // thematicLayers into the way base-style.json has, so they're simply
+  // appended on top. contours (Mapterhorn-derived, tied to base-style.json's
+  // own terrain source) only make sense alongside the default bvmap/Mapterhorn
+  // pairing, not an arbitrary published style that may have no terrain at all.
   const contours = (baseStyle as Record<string, unknown>).contours as Array<Record<string, unknown>> | undefined || [];
-  const layers = [
-    ...baseStyle.before,
-    ...thematicLayers,
-    ...contours,
-    ...baseStyle.after
-  ];
+  const layers = resolvedBasemap
+    ? [...resolvedBasemap.style.layers, ...thematicLayers]
+    : [...baseStyle.before, ...thematicLayers, ...contours, ...baseStyle.after];
 
   // D41: a required_style/optional_style's layers (e.g. vlcm/vbm published
   // by a real Martin server) carry real feature properties just like the
@@ -250,9 +263,9 @@ export function buildStyle(
       version: 8,
       sources,
       layers,
-      glyphs: baseStyle.glyphs,
-      sprite: baseStyle.sprite,
-      terrain: baseStyle.terrain
+      glyphs: (resolvedBasemap ? resolvedBasemap.style.glyphs : baseStyle.glyphs) as string | undefined,
+      sprite: (resolvedBasemap ? resolvedBasemap.style.sprite : baseStyle.sprite) as string | undefined,
+      terrain: (resolvedBasemap ? resolvedBasemap.style.terrain : baseStyle.terrain) as Record<string, unknown> | undefined
     },
     unrenderable,
     styleLayerIds,

@@ -73,6 +73,13 @@ export interface MapIntent {
   optional_layers?: LayerRef[];
   required_styles?: StyleRef[];
   optional_styles?: StyleRef[];
+  // A whole published Martin style (D22) to use as the background in place
+  // of the vendored base-style.json/bvmap default -- e.g. for an area
+  // outside bvmap's Japan-only coverage. Reuses StyleRef verbatim: same
+  // shape, same resolution against catalog_context.active_catalogs as
+  // required_styles/optional_styles. Absent means "keep today's bvmap
+  // default" -- see buildStyle in style.ts.
+  basemap?: StyleRef;
   relationships_to_highlight?: string[];
   render_hints?: RenderHints;
   sharing_policy?: SharingPolicy;

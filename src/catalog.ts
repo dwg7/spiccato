@@ -183,3 +183,18 @@ export async function resolveStyles(intent: MapIntent): Promise<ResolveStylesRes
 
   return { resolved, missing };
 }
+
+// Resolves the optional Map Intent `basemap` field (D22) -- a single
+// StyleRef, not an array like required_styles/optional_styles, so it gets
+// its own resolve function rather than being folded into resolveStyles.
+// Reuses resolveOneStyle/orderCatalogsByPrecedence verbatim against the
+// same active_catalogs; the `true` passed for "required" is just a
+// placeholder to satisfy resolveOneStyle's signature -- buildStyle never
+// toggles a basemap's visibility the way it does required_layers/
+// optional_layers, so the value itself is never read back out.
+export async function resolveBasemap(intent: MapIntent): Promise<{ resolved: ResolvedStyle | null; missing: string | null }> {
+  if (!intent.basemap) return { resolved: null, missing: null };
+  const orderedCatalogs = orderCatalogsByPrecedence(intent);
+  const result = await resolveOneStyle(intent.basemap, true, orderedCatalogs);
+  return 'style' in result ? { resolved: result, missing: null } : { resolved: null, missing: result.style_id };
+}
