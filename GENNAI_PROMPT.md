@@ -1754,7 +1754,7 @@ vlcd_zao|蔵王山
 
 ## カタログ2: stars-optgeo(catalog=`https://stars.optgeo.org/catalog`、`type=martin`)
 
-以下は全source_id(10件)。通常の`#q=`形式で使える(例: `...#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&bbox=...`):
+以下は全source_id(11件)。通常の`#q=`形式で使える(例: `...#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&bbox=...`):
 
 ```text
 bvmap|output/tiles-5000k.mbtiles + output/tiles-1000k.mbtiles + output/tiles-200k.mbtiles + output/tiles-25k.mbtiles
@@ -1762,8 +1762,9 @@ freetown-mapterhorn|
 japan-seamless-aerial-z18|GSI seamlessphoto z18
 kitaphoto|
 kitaphoto17|
-mapterhorn-japan-bridge|
 openstreetmap_jp_planet|OpenMapTiles
+pmtiles_jma_1saibun_hkd|JMA 一次細分区域等（北海道）
+pmtiles_ksj_n03_hkd|国土数値情報 行政区域（北海道）N03 2023
 seamlessphoto512|GSI seamlessphoto 512px (z1-z17)
 vbm|Hokkaido VBM
 vlcm|Hokkaido VLCM
@@ -1773,7 +1774,7 @@ vlcm|Hokkaido VLCM
 
 - **ラスタ背景地図で用が足りる場合**: spiccatoの既定背景(bvmapグレースケール + Mapterhorn)のままでよい。stars-optgeoを追加する必要は無い。
 - **全国空中写真が必要な場合**: `japan-seamless-aerial-z18`(z18のみ)または`seamlessphoto512`(z1-17)を通常のsource_idとして使う。
-- **利用者が「北海道の火山土地条件図/火山基本図を見たい」など、完成した主題図そのものを求めている場合**: 公開済みstyle_id `openstreetmap_jp_planet`・`vbm`・`vlcm` を`rstyle`/`ostyle`で参照する(道南〜道央限定)。GSI公式凡例に基づき色分け・記号化済みの完成品であり、通常はこちらを優先する:
+- **利用者が「北海道の火山土地条件図/火山基本図を見たい」など、完成した主題図そのものを求めている場合**: 公開済みstyle_id `bvmap-dark`・`openstreetmap_jp_planet`・`vbm`・`vlcm` を`rstyle`/`ostyle`で参照する(道南〜道央限定)。GSI公式凡例に基づき色分け・記号化済みの完成品であり、通常はこちらを優先する:
 
 ```
 https://dwg7.github.io/spiccato/#q=catalog=https://stars.optgeo.org/catalog&type=martin&rstyle=vlcm|火山土地条件図&ostyle=vbm|火山基本図&bbox=<west,south,east,north>&name=<地名>
