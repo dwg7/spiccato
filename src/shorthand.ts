@@ -37,7 +37,15 @@ import type { Area, LayerRef, MapIntent, RenderHints, StyleRef } from './types.t
 //                            a layers_txt catalog this just resolves to
 //                            "missing" like any other bad id, no special
 //                            validation needed here (at least one of
-//                            req/opt/rstyle/ostyle must be non-empty)
+//                            req/opt/rstyle/ostyle/basemap must be present).
+//                            NOT the place for a whole-basemap-style
+//                            (style_id meant for `basemap` below, e.g.
+//                            "positron") -- rstyle/ostyle splice the
+//                            style's layers into the thematic band on top
+//                            of the default bvmap background, and a
+//                            basemap-style's own "background"-id layer
+//                            collides with bvmap's, breaking MapLibre
+//                            (D23). Use `basemap` for those instead.
 //   ostyle      (optional)  comma-separated optional_styles[*], same
 //                            "style_id" / "style_id|label" entry syntax
 //   basemap     (optional)  a single style_id or "style_id|label" (D22) --
@@ -45,9 +53,11 @@ import type { Area, LayerRef, MapIntent, RenderHints, StyleRef } from './types.t
 //                            whole published style, e.g. for an area
 //                            outside bvmap's Japan-only coverage. Not a
 //                            comma-separated list like rstyle/ostyle (only
-//                            one basemap can be active); doesn't count
-//                            toward the req/opt/rstyle/ostyle "at least one"
-//                            requirement on its own
+//                            one basemap can be active). Counts toward the
+//                            "at least one" requirement on its own (D23) --
+//                            a basemap-only link (just a background, no
+//                            thematic content) is a legitimate use case,
+//                            not a degenerate one
 //   bbox        (optional)  "west,south,east,north"
 //   name        (optional)  area.name
 //   goal        (optional)  free text; if omitted, main.ts synthesizes one
@@ -180,17 +190,24 @@ export function parseShorthandFragment(hash: string): MapIntent | null {
   const optional = parseRefList(params.get('opt'));
   const requiredStyles = parseStyleRefList(params.get('rstyle'));
   const optionalStyles = parseStyleRefList(params.get('ostyle'));
-  if (required.length === 0 && optional.length === 0 && requiredStyles.length === 0 && optionalStyles.length === 0) {
-    return null;
-  }
 
   // D22: basemap is a single StyleRef, not a list -- same "style_id[|label]"
-  // entry syntax as one rstyle/ostyle entry, just not comma-joined. Doesn't
-  // count toward the "at least one of req/opt/rstyle/ostyle" guard above: a
-  // basemap with nothing else to show would be an empty map with just a
-  // background, not a useful #q= link on its own.
+  // entry syntax as one rstyle/ostyle entry, just not comma-joined.
+  // D23: counts toward the "at least one" guard below on its own -- a
+  // basemap-only link (background with nothing else) is a legitimate use
+  // case (e.g. "just show me positron over Paris"), not a degenerate one.
   const basemapRaw = params.get('basemap');
   const basemap = basemapRaw ? parseStyleRefEntry(basemapRaw) : undefined;
+
+  if (
+    required.length === 0 &&
+    optional.length === 0 &&
+    requiredStyles.length === 0 &&
+    optionalStyles.length === 0 &&
+    !basemap
+  ) {
+    return null;
+  }
 
   const bbox = parseBbox(params.get('bbox'));
   const areaName = params.get('name');
@@ -285,7 +302,15 @@ function buildShorthandParams(intent: MapIntent): URLSearchParams | null {
   const optional = intent.optional_layers ?? [];
   const requiredStyles = intent.required_styles ?? [];
   const optionalStyles = intent.optional_styles ?? [];
-  if (required.length === 0 && optional.length === 0 && requiredStyles.length === 0 && optionalStyles.length === 0) {
+  // D23: basemap counts toward this guard on its own -- see the matching
+  // change in parseShorthandFragment.
+  if (
+    required.length === 0 &&
+    optional.length === 0 &&
+    requiredStyles.length === 0 &&
+    optionalStyles.length === 0 &&
+    !intent.basemap
+  ) {
     return null;
   }
 

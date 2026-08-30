@@ -48,7 +48,20 @@ async function renderIntent(intent: MapIntent, rawIntent: string | null): Promis
       ...resolved.map((r) => r.tilejson.name ?? r.source_id),
       ...resolvedStyles.map((s) => s.label ?? s.style_id)
     ];
-    intent.goal = names.length > 0 ? `${names.join('、')} を表示。` : '(表示するレイヤーが指定されていません)';
+    // D23: a basemap-only intent (no req/opt/rstyle/ostyle at all, now a
+    // valid #q= shape) has nothing in `names` even though a real basemap is
+    // about to render -- fall back to its label/style_id rather than the
+    // "nothing specified" message, which would be actively wrong here.
+    // Only used as a fallback (not unconditionally appended to `names`)
+    // since a basemap alongside actual thematic content is a background
+    // choice, not part of what the goal is about.
+    if (names.length > 0) {
+      intent.goal = `${names.join('、')} を表示。`;
+    } else if (resolvedBasemap) {
+      intent.goal = `${resolvedBasemap.label ?? resolvedBasemap.style_id} を表示。`;
+    } else {
+      intent.goal = '(表示するレイヤーが指定されていません)';
+    }
   }
 
   const { style, unrenderable, styleLayerIds, clickableLayerIds } = buildStyle(intent, resolved, resolvedStyles, resolvedBasemap);

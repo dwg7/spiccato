@@ -544,3 +544,26 @@ Staccatoアーキテクチャの4者モデル(User/Staff/Cartographer/Library)�
 **検証**: `bvmap-dark`・`positron`の両方を、本番相当ビルドの`#q=`(`basemap=bvmap-dark`・`basemap=positron`それぞれ)で実機確認(石狩川下流域・パリのbbox)、いずれもコンソールエラー無し。`node scripts/build-gennai-prompt.mjs`を再実行し、生成された`GENNAI_PROMPT.md`で「火山土地条件図/火山基本図」節が`vlcm`・`vbm`のみに絞られていること、`basemap`節・日本国外の例が正しく挿入されていることを確認した。
 
 **Consequences**: `scripts/build-gennai-prompt.mjs`を変更(`BASEMAP_ONLY_STYLE_IDS`新設、`basemap=`の書式説明・使い分け・ワークド例を追加)。spiccatoリポジトリ側のコード(`src/`)は無改修 — 今回の追記はすべて「D22で作った機構を実際に使うための素材(stars側のスタイル2件)とドキュメント」の話。`stars.optgeo.org`(別インフラ、このリポジトリの外)に`bvmap-dark.json`が新規追加され、`martin`がsystemdサービスとして再起動された。
+
+## D23: `#q=`の`basemap`単体でもリンクが成立するようにし、`rstyle`へのbasemapスタイル誤用を防ぐ注記を追加する
+
+**Status**: Accepted
+
+**Context**: ユーザーが実際に本番で組み立てたリンク(`#q=...&rstyle=positron&bbox=...`)が壊れていることに気づき、原因調査を依頼してきた。
+
+**判明した事実(2点)**:
+
+1. **`rstyle=positron`は技術的にパースできるが、描画時にMapLibreエラーになる**: `positron`はD22で「日本国外向けbasemap」として用意した、完結した公開スタイル(`background`タイプのレイヤーを含む)。`rstyle`/`ostyle`(`required_styles`/`optional_styles`)は`buildStyle()`が常に`base-style.json`(bvmap)の`before`/`after`の間に挟み込む(D39)ため、`positron`自身が持つ`id: "background"`レイヤーと、bvmap側(`base-style.json`の`before`)が持つ同じ`id: "background"`レイヤーが衝突し、`layers[N]: duplicate layer id "background"`というMapLibreエラーで地図が壊れる。実機で再現・確認した。
+2. **`basemap=positron`単体(`req`/`opt`/`rstyle`/`ostyle`を伴わない)は、そもそも`#q=`のリンクとして成立しない**: D22実装時、「`basemap`単体のMap Intentは想定していない」という理由で、`req`/`opt`/`rstyle`/`ostyle`のいずれか一つが非空であることを`#q=`の必須条件にしていた(`basemap`はこの判定に算入しなかった)。しかし今回のユーザーのように「背景地図(basemap)だけを見たい」というのは正当なユースケースであり、この制約は現実の使われ方に合っていなかった。
+
+**Decision**:
+
+1. **`basemap`単体でも`#q=`が成立するよう、ガード条件を緩和した**(`src/shorthand.ts`の`parseShorthandFragment`・`buildShorthandParams`両方): 「`req`/`opt`/`rstyle`/`ostyle`/`basemap`のうち最低一つが非空」という条件に変更。`parseShorthandFragment`では`basemap`のパース位置をガード判定より前に移動する必要があった(判定に使うため)。
+2. **`main.ts`のgoal自動合成に、basemap単体の場合のフォールバックを追加**: 従来は`resolved`/`resolvedStyles`が両方空だと無条件で「(表示するレイヤーが指定されていません)」になっていたが、これは`basemap`単体の場合には事実と異なる誤った文言になる(実際には背景地図が表示される)。`resolved`/`resolvedStyles`が両方空でも`resolvedBasemap`があれば、そのlabel/style_idを使って「positron を表示。」のようなgoalを合成するようにした。`resolvedBasemap`は他の主題コンテンツがある場合には`names`に含めない(basemapは背景の選択であり、主題そのものではないため — 「石狩川下流域の治水地形分類図、positron を表示。」のような不自然な文にしないための判断)。
+3. **`rstyle`の書式説明に、basemap用スタイルを誤って使うと壊れるという注記を追加**(`src/shorthand.ts`冒頭のワイヤーフォーマットコメント): 今回のバグの再発防止として、「basemap用に設計されたstyle_id(`positron`等)は`rstyle`/`ostyle`ではなく`basemap`を使うこと」を明記した。
+
+**判断の理由**: 根本原因(1)は「Staffの誤用」の話であり、コード側では防ぎきれない(`positron`が`background`レイヤーを持つかどうかを`#q=`のパース時点で判定するのは過剰で、`resolveStyles`/`fetchStyle`はあくまで「実在するstyle_idか」だけを見る設計を保ちたい)。実際に描画が壊れた場合はMapLibreの`map.on('error', ...)`(D5)でコンソールに出るので、原因究明はできる。したがって、コードでの直接的な防止ではなく、ドキュメント(コメント)での注記に留めた。一方、根本原因(2)はコード側の制約そのものが不必要に狭かった、実際の需要に合わない話なので、素直にコード側を直した。
+
+**検証**: `npm run typecheck && npm test`(125件、新規3件追加、全通過)、`npm run build`。本番相当ビルドで`#q=catalog=https://stars.optgeo.org/catalog&type=martin&basemap=positron&bbox=1.5,48,3.5,49.5&name=パリ周辺`(reqなし)を開き、(a)貼り付けフォームにフォールバックせず地図ビューが開くこと、(b)goalが「positron を表示。」と正しく合成されること、(c)「背景地図(bvmap)を表示」チェックボックス・レイヤーリストがいずれも出ないこと(D22の既存挙動通り)、(d)コンソールエラー無し、を確認した。また元の`rstyle=positron`のリンクを本番(`https://dwg7.github.io/spiccato/`)で開き、`duplicate layer id "background"`エラーが実際に発生することを確認した上で原因を特定した。
+
+**Consequences**: `src/shorthand.ts`(ガード条件2箇所・doc comment)・`src/main.ts`(goal自動合成)・`src/shorthand.test.ts`(新規テスト3件、旧「basemap単体はnullを返す」テストを置き換え)を変更。`src/mapIntent.ts`(YAML経由のバリデーション、D1のvendoring境界)は無改修 — 今回の緩和は`#q=`(shorthand)専用で、YAML経由のMap Intentは引き続き`required_layers`/`required_styles`のいずれかが必須(D39)のまま変更していない。`mcp/`・`openweb/`・`GENNAI_PROMPT.md`の生成ロジックへの追加変更は無し(GENNAI_PROMPT.mdは既にD22フォローアップで`basemap`を`rstyle`と混同しないよう案内済み)。

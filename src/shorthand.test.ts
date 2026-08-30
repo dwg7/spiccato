@@ -129,10 +129,26 @@ describe('parseShorthandFragment', () => {
     expect(intent!.basemap).toEqual({ style_id: 'openstreetmap_jp_planet' });
   });
 
-  it('omits basemap when absent, and does not let basemap alone satisfy the req/opt/rstyle/ostyle guard', () => {
+  it('omits basemap when absent', () => {
     const withoutBasemap = parseShorthandFragment('#q=catalog=https://example.org/catalog.json&req=a');
     expect(withoutBasemap!.basemap).toBeUndefined();
-    expect(parseShorthandFragment('#q=catalog=https://example.org/catalog.json&basemap=openstreetmap_jp_planet')).toBeNull();
+  });
+
+  // DECISIONS.md D23: a basemap-only link (no req/opt/rstyle/ostyle at all)
+  // is a valid #q= shape -- e.g. "just show me positron over this bbox".
+  it('accepts a basemap-only intent with no req/opt/rstyle/ostyle at all', () => {
+    const intent = parseShorthandFragment('#q=catalog=https://stars.optgeo.org/catalog&type=martin&basemap=positron');
+    expect(intent).not.toBeNull();
+    expect(intent!.basemap).toEqual({ style_id: 'positron' });
+    expect(intent!.required_layers).toBeUndefined();
+    expect(intent!.required_styles).toBeUndefined();
+  });
+
+  it('returns null when req/opt/rstyle/ostyle/basemap are all absent', () => {
+    expect(parseShorthandFragment('#q=catalog=https://example.org/catalog.json')).toBeNull();
+    expect(
+      parseShorthandFragment('#q=catalog=https://example.org/catalog.json&req=&opt=&rstyle=&ostyle=&basemap=')
+    ).toBeNull();
   });
 
   it('tolerates an unencoded catalog URI (no reserved query characters)', () => {
@@ -294,9 +310,20 @@ describe('buildShorthandFragment', () => {
     expect(buildShorthandFragment(intent, live)).toBeNull();
   });
 
-  it('returns null when neither required_layers nor optional_layers is present', () => {
+  it('returns null when neither required_layers nor optional_layers is present, and there is no basemap either', () => {
     const intent: MapIntent = { ...baseIntent, required_layers: undefined };
     expect(buildShorthandFragment(intent, live)).toBeNull();
+  });
+
+  // DECISIONS.md D23: a basemap-only intent (no req/opt/rstyle/ostyle at
+  // all) is a valid #q= shape now.
+  it('serializes a basemap-only intent with no required_layers/optional_layers/required_styles/optional_styles at all', () => {
+    const intent: MapIntent = { ...baseIntent, required_layers: undefined, basemap: { style_id: 'positron' } };
+    const frag = buildShorthandFragment(intent, live);
+    expect(frag).not.toBeNull();
+    const roundTripped = parseShorthandFragment(frag!);
+    expect(roundTripped!.basemap).toEqual({ style_id: 'positron' });
+    expect(roundTripped!.required_layers).toBeUndefined();
   });
 });
 
