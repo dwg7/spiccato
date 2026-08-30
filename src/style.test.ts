@@ -299,7 +299,7 @@ describe('buildStyle with a resolved basemap (D22)', () => {
     expect(style.terrain).toBeUndefined();
   });
 
-  it('appends thematic layers after the basemap\'s own layers, with no before/after/contours splicing', () => {
+  it('places thematic layers after the basemap\'s non-symbol layers, with no base-style.json contours/bvmap present', () => {
     const rb = resolvedBasemap('openstreetmap_jp_planet');
     const resolvedLayers: ResolvedLayer[] = [
       { source_id: 'std', required: true, catalog_id: 'x', tilejson: tilejson(['https://e/std/{z}/{x}/{y}.png']) }
@@ -308,10 +308,55 @@ describe('buildStyle with a resolved basemap (D22)', () => {
 
     const bgIdx = style.layers.findIndex((l) => l.id === 'openstreetmap_jp_planet-bg');
     const stdIdx = style.layers.findIndex((l) => l.id === 'std');
-    expect(bgIdx).toBe(0); // basemap's own layers come first, unmodified
+    expect(bgIdx).toBe(0); // basemap's own non-symbol layers come first, unmodified
     expect(stdIdx).toBeGreaterThan(bgIdx);
     // None of base-style.json's own bvmap/road layers should be present.
     expect(style.layers.some((l) => ((l as Record<string, unknown>).id as string)?.startsWith('bvmap'))).toBe(false);
+  });
+
+  // D24: an opaque thematic layer (e.g. an aerial photo) used to bury the
+  // whole basemap, including place-name labels -- split the basemap's own
+  // layers around thematicLayers so symbol (label) layers stay on top.
+  it('splits basemap layers around thematicLayers by type: non-symbol before, symbol (labels) after', () => {
+    const rb = resolvedBasemap('positron', {
+      layers: [
+        { id: 'background', type: 'background' },
+        { id: 'water', type: 'fill' },
+        { id: 'highway_major', type: 'line' },
+        { id: 'place_city', type: 'symbol' },
+        { id: 'place_town', type: 'symbol' }
+      ]
+    });
+    const resolvedLayers: ResolvedLayer[] = [
+      { source_id: 'photo', required: true, catalog_id: 'x', tilejson: tilejson(['https://e/photo/{z}/{x}/{y}.png']) }
+    ];
+    const { style } = buildStyle({ ...intent, required_layers: [{ source_id: 'photo' }], optional_layers: [] }, resolvedLayers, [], rb);
+
+    const ids = style.layers.map((l) => (l as Record<string, unknown>).id as string);
+    // Non-symbol basemap layers, in original order, all before the photo.
+    expect(ids.indexOf('background')).toBeLessThan(ids.indexOf('photo'));
+    expect(ids.indexOf('water')).toBeLessThan(ids.indexOf('photo'));
+    expect(ids.indexOf('highway_major')).toBeLessThan(ids.indexOf('photo'));
+    // Symbol (label) basemap layers, in original order, all after the photo
+    // -- this is the actual fix: labels stay legible over an opaque overlay.
+    expect(ids.indexOf('place_city')).toBeGreaterThan(ids.indexOf('photo'));
+    expect(ids.indexOf('place_town')).toBeGreaterThan(ids.indexOf('place_city'));
+  });
+
+  it('returns basemapLayerIds covering all of the basemap\'s layers (both bands), for the background-toggle checkbox', () => {
+    const rb = resolvedBasemap('positron', {
+      layers: [
+        { id: 'background', type: 'background' },
+        { id: 'place_city', type: 'symbol' }
+      ]
+    });
+    const { basemapLayerIds } = buildStyle({ ...intent, required_layers: [], optional_layers: [] }, [], [], rb);
+    expect(basemapLayerIds).toEqual(['background', 'place_city']);
+  });
+
+  it('returns an empty basemapLayerIds when there is no basemap', () => {
+    const { basemapLayerIds } = buildStyle(intent, [], [], null);
+    expect(basemapLayerIds).toEqual([]);
   });
 });
 

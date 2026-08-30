@@ -567,3 +567,22 @@ Staccatoアーキテクチャの4者モデル(User/Staff/Cartographer/Library)�
 **検証**: `npm run typecheck && npm test`(125件、新規3件追加、全通過)、`npm run build`。本番相当ビルドで`#q=catalog=https://stars.optgeo.org/catalog&type=martin&basemap=positron&bbox=1.5,48,3.5,49.5&name=パリ周辺`(reqなし)を開き、(a)貼り付けフォームにフォールバックせず地図ビューが開くこと、(b)goalが「positron を表示。」と正しく合成されること、(c)「背景地図(bvmap)を表示」チェックボックス・レイヤーリストがいずれも出ないこと(D22の既存挙動通り)、(d)コンソールエラー無し、を確認した。また元の`rstyle=positron`のリンクを本番(`https://dwg7.github.io/spiccato/`)で開き、`duplicate layer id "background"`エラーが実際に発生することを確認した上で原因を特定した。
 
 **Consequences**: `src/shorthand.ts`(ガード条件2箇所・doc comment)・`src/main.ts`(goal自動合成)・`src/shorthand.test.ts`(新規テスト3件、旧「basemap単体はnullを返す」テストを置き換え)を変更。`src/mapIntent.ts`(YAML経由のバリデーション、D1のvendoring境界)は無改修 — 今回の緩和は`#q=`(shorthand)専用で、YAML経由のMap Intentは引き続き`required_layers`/`required_styles`のいずれかが必須(D39)のまま変更していない。`mcp/`・`openweb/`・`GENNAI_PROMPT.md`の生成ロジックへの追加変更は無し(GENNAI_PROMPT.mdは既にD22フォローアップで`basemap`を`rstyle`と混同しないよう案内済み)。
+
+## D24: `basemap`使用時、主題レイヤーの上に注記(ラベル)が来るよう分割し、専用の背景トグルチェックボックスを設ける
+
+**Status**: Accepted
+
+**Context**: ユーザーから、`basemap`(D22)の挙動が既定のbvmapと異なる、という指摘があった。既定のbvmap(`basemap`未指定)は`base-style.json`の`before`(背景・地形)/`after`(道路・注記)という手作業でキュレーションされた分割を持ち、主題レイヤー(req/opt/rstyle/ostyle)はその間に挟まる — 道路や地名注記は主題レイヤーの上に読めたまま残る設計(kitavolca由来、D24 in faceless-cartographer)。一方`basemap`(D22実装)は`resolvedBasemap.style.layers`を単純に`thematicLayers`の前に丸ごと連結していたため、不透明な主題レイヤー(空中写真等)が`positron`の全レイヤー(注記含む)を完全に覆い隠してしまっていた。加えて、`basemap`指定時は「背景地図(bvmap)を表示」チェックボックス自体を非表示にしていた(D22)ため、`positron`使用時に背景の表示/非表示を切り替える手段が無かった。
+
+**判明した事実**: `positron`の実レイヤー構成(50件)を調査したところ、`background`/`fill`/`line`型のレイヤー(背景色・土地被覆・水域・建物・道路・鉄道等、0〜33番目)がほぼ全て先に来て、`symbol`型のレイヤー(道路名・地名等の注記、34〜49番目)がほぼ全て後ろにまとまっている、というオーソドックスなOpenMapTilesスキームの慣習に従っていた(唯一の例外は8番目の`water_name`)。これは`positron`固有の話ではなく、OpenMapTiles系のベクトルタイルスタイル一般に広く見られる設計慣習(ラベルは`symbol`型でレイヤー配列の後方にまとめ、最後に描画=最前面に来るようにする)である。
+
+**Decision**:
+
+1. **`basemap`のレイヤーを`type === 'symbol'`で分割し、主題レイヤーを挟む**(`src/style.ts`): `resolvedBasemap.style.layers`を`symbol`以外(`basemapBefore`)と`symbol`(`basemapAfter`)に分け、`[...basemapBefore, ...thematicLayers, ...basemapAfter]`という順で結合する。既定のbvmapパスの`before`/`thematic`/`contours`/`after`という構造と精神的に対応する(ただし`contours`はbvmap/Mapterhorn地形専用のままなので`basemap`パスには含めない、D22の既存判断を維持)。
+   - **`type`判定を選んだ理由**: 任意の(未知の)公開スタイルに対して安全に適用できる分割基準が必要だった。`kitavolca`/`base-style.json`の`before`/`after`分割は人手でキュレーションされたもの(道路の線そのものも"after"側=主題レイヤーの上)だが、これは`base-style.json`固有の判断であり、任意のfetchしたスタイルに対して「どのレイヤーが道路か」を汎用的に判定する信頼できる規約は存在しない(レイヤーid命名規則がスタイルごとに異なるため)。一方、「ラベル(symbol型)は配列の後方に置く」というのは、MapLibre/OpenMapTiles系スタイル全般でほぼ普遍的に成立する規約であり、`positron`に限らず今後追加されるどんな`basemap`候補にも安全に適用できる。
+   - **道路線自体は主題レイヤーの下のまま**: この判断により、`highway_major`等の`line`型レイヤー(道路そのもの)は依然として不透明な主題レイヤーの下に隠れる。ユーザーの指摘は具体的に「注記」を挙げており、道路線自体を主題レイヤーの上に持ってくることまでは要求されていない。汎用的な「道路検出」規約が無い以上、これ以上の分割は行わない、という保守的な線引き。
+2. **`basemapLayerIds`(basemapの全レイヤーid、before/after両方)を`buildStyle`の返り値に追加**し、`src/render.ts`で背景トグルチェックボックスを常に表示するよう変更した(`intent.basemap`の有無で非表示にしていたD22の判断を撤回): `basemap`指定時は「背景地図(bvmap)を表示」の代わりに「背景地図(<label または style_id>)を表示」(例:「背景地図(positron)を表示」)を表示し、`data-layer-toggle="__basemap__"`という合成キーで`basemapLayerIds`全体(symbol/非symbol問わず)を一括トグルする。既存の`layerIdsBySourceId`は`source`プロパティによる自動収集だが、任意の`basemap`は複数の異なるsource名を持つ可能性があり(現状のpositron/bvmap-darkはそれぞれ単一sourceだが、将来的な保証は無い)、`source`名に依存しない専用キーにした。
+
+**検証**: `npm run typecheck && npm test`(128件、新規3件追加、全通過)。追加したユニットテストで、`background`/`fill`/`line`型のレイヤーは主題レイヤーの前、`symbol`型は後ろに来ること、`basemapLayerIds`が両バンド分すべて含むことを確認。本番相当ビルドで、ユーザー提示のフリータウンの例(`req=freetown-mapterhorn`空撮 + `basemap=positron`)を実機確認し、「背景地図(positron)を表示」チェックボックスが表示され、チェック状態(初期値true)・`data-layer-toggle="__basemap__"`が正しく紐づいていることを確認した。既定の(`basemap`無し)bvmapパスは「背景地図(bvmap)を表示」チェックボックスを含め無変更のまま動作することも確認(リグレッション無し)。
+
+**Consequences**: `src/style.ts`(`buildStyle`のレイヤー結合ロジック変更、`basemapLayerIds`返り値追加)・`src/main.ts`(`basemapLayerIds`を`renderMapView`へ受け渡し)・`src/render.ts`(背景トグルの条件分岐撤回・`__basemap__`キー追加)・`src/style.test.ts`(既存テスト名/内容更新、新規テスト3件)を変更。`bvmap-dark`(D22フォローアップ)を含む、すべての`resolvedBasemap`経由のスタイルに同じ分割ロジックが一律適用される(スタイルごとの特別扱いはしない)。`src/shorthand.ts`・`GENNAI_PROMPT.md`・`mcp/`・`openweb/`への変更は無し。

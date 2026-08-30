@@ -320,12 +320,26 @@ export function renderMapView(
     resolvedStyles: ResolvedStyle[];
     styleLayerIds: Record<string, string[]>;
     clickableLayerIds: string[];
+    basemapLayerIds: string[];
     missing: string[];
     unrenderable: string[];
     onBack: () => void;
   }
 ): void {
-  const { rawIntent, intent, view, style, resolved, resolvedStyles, styleLayerIds, clickableLayerIds, missing, unrenderable, onBack } = opts;
+  const {
+    rawIntent,
+    intent,
+    view,
+    style,
+    resolved,
+    resolvedStyles,
+    styleLayerIds,
+    clickableLayerIds,
+    basemapLayerIds,
+    missing,
+    unrenderable,
+    onBack
+  } = opts;
 
   const missingNotice =
     missing.length > 0
@@ -394,16 +408,14 @@ export function renderMapView(
       ${missingNotice}
       ${unrenderableNotice}
       ${urlShareAdvisory}
-      ${intent.basemap ? '' : `
       <div class="background-toggle" style="margin: .5rem 0;">
         <label class="dads-checkbox" data-size="sm">
           <span class="dads-checkbox__checkbox">
-            <input class="dads-checkbox__input" type="checkbox" data-layer-toggle="bvmap" checked>
+            <input class="dads-checkbox__input" type="checkbox" data-layer-toggle="${intent.basemap ? '__basemap__' : 'bvmap'}" checked>
           </span>
-          <span class="dads-checkbox__label">背景地図(bvmap)を表示</span>
+          <span class="dads-checkbox__label">背景地図(${escapeHtml(intent.basemap ? intent.basemap.label ?? intent.basemap.style_id : 'bvmap')})を表示</span>
         </label>
       </div>
-      `}
       ${resolved.length > 0 || resolvedStyles.length > 0 ? `
       <div class="layer-search-wrapper" style="margin: .5rem 0;">
         <input type="text" id="layer-search" placeholder="🔍 Search layers..." class="dads-text-input" style="width: 100%; font-size: 0.88rem; padding: 0.4rem 0.6rem; border: 1px solid rgba(0, 0, 0, 0.2); border-radius: var(--border-radius-4);">
@@ -534,6 +546,13 @@ export function renderMapView(
   }
   for (const [styleId, ids] of Object.entries(styleLayerIds)) {
     layerIdsBySourceId.set(styleId, ids);
+  }
+  // D24: a resolved basemap's layers can span multiple/arbitrary source
+  // names (unlike bvmap's known-fixed "bvmap" source id), so the
+  // "背景地図(...)を表示" checkbox targets this synthetic key instead of
+  // relying on scanning by `source`.
+  if (basemapLayerIds.length > 0) {
+    layerIdsBySourceId.set('__basemap__', basemapLayerIds);
   }
 
   container.querySelectorAll<HTMLInputElement>('[data-layer-toggle]').forEach((el) => {

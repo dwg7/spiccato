@@ -64,7 +64,12 @@ async function renderIntent(intent: MapIntent, rawIntent: string | null): Promis
     }
   }
 
-  const { style, unrenderable, styleLayerIds, clickableLayerIds } = buildStyle(intent, resolved, resolvedStyles, resolvedBasemap);
+  const { style, unrenderable, styleLayerIds, clickableLayerIds, basemapLayerIds } = buildStyle(
+    intent,
+    resolved,
+    resolvedStyles,
+    resolvedBasemap
+  );
   const view = computeInitialView(intent, resolved);
 
   renderMapView(app!, {
@@ -76,6 +81,7 @@ async function renderIntent(intent: MapIntent, rawIntent: string | null): Promis
     resolvedStyles,
     styleLayerIds,
     clickableLayerIds,
+    basemapLayerIds,
     missing,
     unrenderable,
     onBack: () => {

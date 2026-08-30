@@ -111,7 +111,13 @@ export function buildStyle(
   resolved: ResolvedLayer[],
   resolvedStyles: ResolvedStyle[] = [],
   resolvedBasemap: ResolvedStyle | null = null
-): { style: MapLibreStyle; unrenderable: string[]; styleLayerIds: Record<string, string[]>; clickableLayerIds: string[] } {
+): {
+  style: MapLibreStyle;
+  unrenderable: string[];
+  styleLayerIds: Record<string, string[]>;
+  clickableLayerIds: string[];
+  basemapLayerIds: string[];
+} {
   const sources: MapLibreStyle['sources'] = resolvedBasemap ? { ...resolvedBasemap.style.sources } : { ...baseStyle.sources };
   const thematicLayers: MapLibreStyle['layers'] = [];
   const unrenderable: string[] = [];
@@ -241,15 +247,36 @@ export function buildStyle(
     styleLayerIds[styleId] = ids;
   }
 
-  // D22: a resolved basemap is a complete style already (background through
-  // labels in one flat array) -- there's no before/after split to insert
-  // thematicLayers into the way base-style.json has, so they're simply
-  // appended on top. contours (Mapterhorn-derived, tied to base-style.json's
-  // own terrain source) only make sense alongside the default bvmap/Mapterhorn
-  // pairing, not an arbitrary published style that may have no terrain at all.
+  // D24: a resolved basemap's own layers are split into a "before" band
+  // (everything except symbol/label layers) and an "after" band (symbol
+  // layers only), with thematicLayers sandwiched between -- mirroring
+  // base-style.json's own before/thematic/after shape below, so an aerial
+  // photo or other opaque overlay doesn't bury the basemap's place names.
+  // `type === 'symbol'` is used as the split signal rather than anything
+  // content-specific (e.g. matching layer ids against "road"/"highway")
+  // because it's the one convention that holds across essentially any
+  // vector basemap style (OpenMapTiles-derived ones included, which is what
+  // every basemap= candidate used so far actually is): labels are rendered
+  // as symbol layers and are the thing that most needs to stay legible over
+  // opaque thematic content. Road/rail linework (typically `line` type)
+  // stays in the "before" band and can still be covered by an opaque photo
+  // -- unlike base-style.json's own bvmap/kitavolca-authored split, there's
+  // no reliable, style-agnostic way to tell "a road layer" apart from any
+  // other `line` layer in an arbitrary fetched style, so this deliberately
+  // doesn't attempt that. See DECISIONS.md D24 for the full reasoning and
+  // the basemapLayerIds field below (background-toggle checkbox, D9's
+  // "背景地図(bvmap)を表示" precedent, but scoped to whichever basemap is
+  // actually active).
+  const basemapBefore = resolvedBasemap ? resolvedBasemap.style.layers.filter((l) => l.type !== 'symbol') : [];
+  const basemapAfter = resolvedBasemap ? resolvedBasemap.style.layers.filter((l) => l.type === 'symbol') : [];
+  const basemapLayerIds = resolvedBasemap ? resolvedBasemap.style.layers.map((l) => l.id as string) : [];
+
+  // contours (Mapterhorn-derived, tied to base-style.json's own terrain
+  // source) only make sense alongside the default bvmap/Mapterhorn pairing,
+  // not an arbitrary published basemap that may have no terrain at all.
   const contours = (baseStyle as Record<string, unknown>).contours as Array<Record<string, unknown>> | undefined || [];
   const layers = resolvedBasemap
-    ? [...resolvedBasemap.style.layers, ...thematicLayers]
+    ? [...basemapBefore, ...thematicLayers, ...basemapAfter]
     : [...baseStyle.before, ...thematicLayers, ...contours, ...baseStyle.after];
 
   // D41: a required_style/optional_style's layers (e.g. vlcm/vbm published
@@ -269,7 +296,8 @@ export function buildStyle(
     },
     unrenderable,
     styleLayerIds,
-    clickableLayerIds
+    clickableLayerIds,
+    basemapLayerIds
   };
 }
 
