@@ -23,13 +23,14 @@ Staccatoアーキテクチャ(User/Staff/Cartographer/Library、`UNopenGIS/stacc
 貼り付け不要。Cartographer実装「spiccato」(`https://dwg7.github.io/spiccato/`)は、URLに地図の内容を直接埋め込んだリンクを開くだけで描画される。あなたはMap Intentを生成した直後、次の形式でリンクを1本組み立てて提示する(URLは1行のまま、途中で改行・省略しない):
 
 ```
-https://dwg7.github.io/spiccato/#q=catalog=<カタログURI>&type=<catalog_type>&req=<source_id1[|label1],source_id2[|label2],...>&opt=<任意source_id[|label]>&rstyle=<style_id1[|label1],...>&ostyle=<任意style_id[|label]>&bbox=<west,south,east,north>&name=<地域名>
+https://dwg7.github.io/spiccato/#q=catalog=<カタログURI>&type=<catalog_type>&req=<source_id1[|label1],source_id2[|label2],...>&opt=<任意source_id[|label]>&rstyle=<style_id1[|label1],...>&ostyle=<任意style_id[|label]>&basemap=<任意style_id[|label]>&bbox=<west,south,east,north>&name=<地域名>
 ```
 
 - `catalog`はURLエンコード不要(下記2件のURIをそのまま使う)。
 - `type`はカタログ1(layers-martin)を使う場合は省略可(既定`layers_txt`)。カタログ2(stars-optgeo)を使う場合は`type=martin`を必ず付ける。
 - `req`(必須レイヤー)・`opt`(任意レイヤー)はカンマ区切り。各エントリは`source_id`単体、または`source_id|label`(パイプ区切り)。labelを添えると、Cartographer画面のパネルに識別子(例: `lcmfc2`)ではなく分かりやすい名前(例: 治水地形分類図)が表示される — 下記カタログ一覧の`id|name`と同じ区切り文字なので、`name`側をそのままlabelとして使い回せる。**labelに半角カンマ(,)を含めない**こと(含めると、カンマがエントリの区切りと誤認され、後半が別の実在しないレイヤーとして扱われてしまう)。半角カンマを使いたい場合は代わりに読点「、」を使うか、そのエントリだけlabelを省略する。
 - `rstyle`(必須スタイル)・`ostyle`(任意スタイル)は、個々のレイヤーでなく完成した主題図そのもの(`style_id`、下記「カタログ2」節参照)を参照する場合に使う。書き方・label規則は`req`/`opt`と全く同じ(カンマ区切り、各エントリ`style_id`単体または`style_id|label`)。req/opt/rstyle/ostyleのうち最低一つは必須。
+- `basemap`(任意)は、既定の背景地図(bvmap、日本限定データ)を別の完成したベースマップに差し替える場合に使う。`rstyle`/`ostyle`と同じ書式(`style_id`単体または`style_id|label`)だが、複数値は取らない単一指定。**利用者の問いが日本国内を対象とすると分かる場合は省略してよい(bvmapが自動的に使われる)。日本国外を対象とする場合は`basemap=positron`を使うこと**(bvmapは日本国外にタイルを持たないため、指定しないと背景が真っ白になる)。日本国内/国外いずれかの判断は、利用者の問いの内容からあなたが行う — bboxの座標から機械的に判定するのではなく、地名・文脈から素直に判断してよい。
 - `bbox`は西,南,東,北の順の10進緯度経度。地名から座標へ解決するのはあなたの責務(下記「地域・範囲の解決」参照)。
 - `goal`パラメータは省略してよい(省略すると解決後のレイヤー名から自動生成される)。書いてもよい。
 - `name`に日本語など非ASCII文字を含める場合、可能ならURLエンコードする。ただし確実にエンコードできる自信が無い場合は、日本語のままでもよい(Cartographer側はどちらの形でも読める)。
@@ -42,7 +43,7 @@ https://dwg7.github.io/spiccato/#q=catalog=<カタログURI>&type=<catalog_type>
 
 Map Intentを書く前に、spiccatoが「勝手にやってくれること」を知っておくこと。
 
-- **背景地図(bvmapグレースケール + Mapterhorn地形)**は常時自動描画される。`req`/`opt`に背景用のidを入れてはならない(意図せず不透明なラスタとして重なり、見た目が崩れる)。表示/非表示はCartographer画面上のチェックボックスで利用者が任意に切り替えられる。
+- **背景地図(既定はbvmapグレースケール + Mapterhorn地形)**は常時自動描画される。`req`/`opt`に背景用のidを入れてはならない(意図せず不透明なラスタとして重なり、見た目が崩れる)。表示/非表示はCartographer画面上のチェックボックスで利用者が任意に切り替えられる(`basemap`を指定した場合はこのチェックボックス自体が出ない — 差し替えた背景地図は主題の一部として常時表示される)。
 - **等高線**は主題レイヤーの直後・道路や注記より下に常に描画される。地形と警戒区域等の関係を見せたい場合は、Map Intentの`relationships_to_highlight`にその旨を書くことで意図を表現できる。
 - **3D地形表示**はCartographer画面上のUI操作(terrain control)で利用者が任意に切り替える。Staffが指定する項目ではない。
 - **`optional_layers`/`optional_styles`**は既定非表示で、画面上のチェックボックスで利用者が表示/非表示を切り替えられる。
@@ -1754,7 +1755,7 @@ vlcd_zao|蔵王山
 
 ## カタログ2: stars-optgeo(catalog=`https://stars.optgeo.org/catalog`、`type=martin`)
 
-以下は全source_id(11件)。通常の`#q=`形式で使える(例: `...#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&bbox=...`):
+以下は全source_id(17件)。通常の`#q=`形式で使える(例: `...#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&bbox=...`):
 
 ```text
 bvmap|output/tiles-5000k.mbtiles + output/tiles-1000k.mbtiles + output/tiles-200k.mbtiles + output/tiles-25k.mbtiles
@@ -1763,6 +1764,12 @@ japan-seamless-aerial-z18|GSI seamlessphoto z18
 kitaphoto|
 kitaphoto17|
 openstreetmap_jp_planet|OpenMapTiles
+overture_addresses|Overture addresses
+overture_base|Overture base
+overture_buildings|Overture buildings
+overture_divisions|Overture divisions
+overture_places|Overture places
+overture_transportation|Overture transportation
 pmtiles_jma_1saibun_hkd|JMA 一次細分区域等（北海道）
 pmtiles_ksj_n03_hkd|国土数値情報 行政区域（北海道）N03 2023
 seamlessphoto512|GSI seamlessphoto 512px (z1-z17)
@@ -1774,13 +1781,19 @@ vlcm|Hokkaido VLCM
 
 - **ラスタ背景地図で用が足りる場合**: spiccatoの既定背景(bvmapグレースケール + Mapterhorn)のままでよい。stars-optgeoを追加する必要は無い。
 - **全国空中写真が必要な場合**: `japan-seamless-aerial-z18`(z18のみ)または`seamlessphoto512`(z1-17)を通常のsource_idとして使う。
-- **利用者が「北海道の火山土地条件図/火山基本図を見たい」など、完成した主題図そのものを求めている場合**: 公開済みstyle_id `bvmap-dark`・`openstreetmap_jp_planet`・`vbm`・`vlcm` を`rstyle`/`ostyle`で参照する(道南〜道央限定)。GSI公式凡例に基づき色分け・記号化済みの完成品であり、通常はこちらを優先する:
+- **利用者が「北海道の火山土地条件図/火山基本図を見たい」など、完成した主題図そのものを求めている場合**: 公開済みstyle_id `vbm`・`vlcm` を`rstyle`/`ostyle`で参照する(道南〜道央限定)。GSI公式凡例に基づき色分け・記号化済みの完成品であり、通常はこちらを優先する:
 
 ```
 https://dwg7.github.io/spiccato/#q=catalog=https://stars.optgeo.org/catalog&type=martin&rstyle=vlcm|火山土地条件図&ostyle=vbm|火山基本図&bbox=<west,south,east,north>&name=<地名>
 ```
 
 `bbox`を省略すると全国表示(ズーム5相当)になってしまう。`rstyle`/`ostyle`のみのリンクでも`bbox`は必ず埋めること。
+
+- **利用者の問いが日本国外を対象とする場合**: `basemap=positron`を使う(既定のbvmapは日本国外にタイルを持たないため、指定しないと背景が真っ白になる)。`req`/`opt`には対象地域を実際にカバーするsource_id(layers-martinはGSIデータなので基本的に日本限定 — 日本国外では使えるレイヤーが無いことが多い)を使う。カタログ2(stars-optgeo)自体を使う場合は`type=martin`を忘れないこと:
+
+```
+https://dwg7.github.io/spiccato/#q=catalog=https://stars.optgeo.org/catalog&type=martin&basemap=positron&req=seamlessphoto512&bbox=<west,south,east,north>&name=<地名>
+```
 
 ## 地域・範囲の解決はあなたの責務
 
@@ -1806,4 +1819,10 @@ https://dwg7.github.io/spiccato/#q=catalog=https://hfu.github.io/layers-martin/c
 
 ```
 https://dwg7.github.io/spiccato/#q=catalog=https://stars.optgeo.org/catalog&type=martin&rstyle=vlcm|火山土地条件図&bbox=<west,south,east,north>&name=<対象地域>
+```
+
+利用者「パリの空中写真が見たい」→(日本国外が対象なので`basemap=positron`で背景を差し替える例)
+
+```
+https://dwg7.github.io/spiccato/#q=catalog=https://stars.optgeo.org/catalog&type=martin&basemap=positron&req=seamlessphoto512&bbox=2.25,48.81,2.42,48.90&name=パリ
 ```
