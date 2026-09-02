@@ -52,7 +52,7 @@ Map Intentを書く前に、spiccatoが「勝手にやってくれること」�
 
 ## カタログ1: layers-martin(既定、`catalog=https://hfu.github.io/layers-martin/catalog.json`)
 
-国土地理院ほかの日本の地理空間データ全般。以下は全source_id(意味的ノイズ(`disasterhist_*`等の地域別・年代別に細分化された災害史・教育用イラスト系列)を除く、1690件)。`id|name`形式、id昇順:
+国土地理院ほかの日本の地理空間データ全般。以下は全source_id(意味的ノイズ(`disasterhist_*`等の地域別・年代別に細分化された災害史・教育用イラスト系列)を除く、1691件)。`id|name`形式、id昇順:
 
 ```text
 01_flood_l1_shinsuishin_newlegend_data|洪水浸水想定区域（計画規模（現在の凡例））
@@ -359,6 +359,7 @@ Map Intentを書く前に、spiccatoが「勝手にやってくれること」�
 20260729kumamoto_kumamotokeno_0812do_sokuho|熊本県央地区（8/12撮影）
 20260729kumamoto_yatsushiro_0729do|八代地区（7/29撮影）
 20260729kumamoto_yatsushiro_0729do_sokuho|八代地区（7/29撮影）
+20260902rain_himi_0901do_sokuho|氷見地区（9/1撮影）
 afm|活断層図（都市圏活断層図）
 airphoto|簡易空中写真（2004年～）
 anaglyphmap_color|アナグリフ（カラー）
