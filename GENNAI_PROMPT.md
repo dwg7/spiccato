@@ -1756,7 +1756,7 @@ vlcd_zao|蔵王山
 
 ## カタログ2: stars-optgeo(catalog=`https://stars.optgeo.org/catalog`、`type=martin`)
 
-以下は全source_id(41件)。通常の`#q=`形式で使える(例: `...#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&bbox=...`):
+以下は全source_id(42件)。通常の`#q=`形式で使える(例: `...#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&bbox=...`):
 
 ```text
 bvmap|output/tiles-5000k.mbtiles + output/tiles-1000k.mbtiles + output/tiles-200k.mbtiles + output/tiles-25k.mbtiles
@@ -1788,6 +1788,7 @@ japan-seamless-aerial-z18|GSI seamlessphoto z18
 kitaphoto|
 kitaphoto17|
 mapterhorn-japan-bridge|
+mapterhorn-japan-bridge-lineage|
 openstreetmap_jp_planet|OpenMapTiles
 overture_addresses|Overture addresses
 overture_base|Overture base
