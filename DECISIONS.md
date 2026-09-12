@@ -586,3 +586,24 @@ Staccatoアーキテクチャの4者モデル(User/Staff/Cartographer/Library)�
 **検証**: `npm run typecheck && npm test`(128件、新規3件追加、全通過)。追加したユニットテストで、`background`/`fill`/`line`型のレイヤーは主題レイヤーの前、`symbol`型は後ろに来ること、`basemapLayerIds`が両バンド分すべて含むことを確認。本番相当ビルドで、ユーザー提示のフリータウンの例(`req=freetown-mapterhorn`空撮 + `basemap=positron`)を実機確認し、「背景地図(positron)を表示」チェックボックスが表示され、チェック状態(初期値true)・`data-layer-toggle="__basemap__"`が正しく紐づいていることを確認した。既定の(`basemap`無し)bvmapパスは「背景地図(bvmap)を表示」チェックボックスを含め無変更のまま動作することも確認(リグレッション無し)。
 
 **Consequences**: `src/style.ts`(`buildStyle`のレイヤー結合ロジック変更、`basemapLayerIds`返り値追加)・`src/main.ts`(`basemapLayerIds`を`renderMapView`へ受け渡し)・`src/render.ts`(背景トグルの条件分岐撤回・`__basemap__`キー追加)・`src/style.test.ts`(既存テスト名/内容更新、新規テスト3件)を変更。`bvmap-dark`(D22フォローアップ)を含む、すべての`resolvedBasemap`経由のスタイルに同じ分割ロジックが一律適用される(スタイルごとの特別扱いはしない)。`src/shorthand.ts`・`GENNAI_PROMPT.md`・`mcp/`・`openweb/`への変更は無し。
+
+## D25: 「読み込み直後は地図が白く、resizeで直る」という報告 — 実ブラウザでは再現せず、ツール由来と判断
+
+**Status**: Resolved(コード変更なし、ツール由来と結論)
+
+**Context**: `staccato-ecosystem`(`hfu/kataribe`・`hfu/volca`まわりのエコシステム管理セッション)経由で、`hfu/volca`(北海道9火山の防災協議会に測量成果を届ける企画)が協議会向け資料にspiccatoリンクを載せようとして「白い地図」に当たった、という報告を受けた。再現手順:
+
+```
+https://dwg7.unopengis.org/spiccato/#q=catalog=https://stars.optgeo.org/catalog&type=martin&rstyle=vlcm|火山土地条件図&lat=42.690&lng=141.377&zoom=13&name=樽前山
+```
+
+読み込み直後は地図が白い(パネル・ズームボタン・スケールバーは正常表示)が、`window.dispatchEvent(new Event('resize'))`だけで正常描画される、という主張。報告元は3セッションを費やしてD5(2026-08-03、真因はMapLibreワーカースクリプトの欠落)の前例を踏まえ、「ツール産物として安易に却下すべきでない」と慎重に検討していた — canvas/コンテナのサイズはresize前後で完全一致(サイズ問題ではない)、attributionのDOMテキストがresize前後で変化する(VLCMソースのattributionがresizeまで登録されない)という観察を根拠に、環境要因説への一番強い反証と位置づけていた。`render.ts`の`map.on('error', ...)`直前のコメントが指す診断がD5と同一かどうかの確認も依頼された。
+
+**調査**:
+- `render.ts`のコメント「(see DECISIONS.md)」はD5そのものを指すと確認した(D5本文の「document.hidden」「requestAnimationFrame」「background-tab」という記述と一致、他に該当する記述なし)。D5の真因(ワーカースクリプト欠落)は既に修正済みで、今回の現象を扱ったものではない — 別問題として検証が必要、という報告元の判断は正しかった。
+- 自分の自動化ブラウザペインで同じ手順を試したところ、`document.hidden: true`(D5前半の誤診断を招いたのと同じ制約)であることを確認した。この環境ではresize前後ともcanvas中心のGLピクセル(`gl.readPixels`で直接確認)が完全に透明`(0,0,0,0)`のまま、attributionテキストも前後とも空文字列のまま — 「resizeで直る」現象を再現も反証もできなかった。`maplibre-gl-worker.mjs`はネットワークログ上リクエストされており(欠落なし)、`map.on('error', ...)`からのコンソールエラーも無かった。Claude in Chrome(実Chrome拡張)も未接続で試せなかった。
+- ユーザー(hfu)本人に、実際のフォアグラウンドブラウザで同じリンクを開いてもらい確認した結果: **「読み込み直後に地図は問題なく出る。ウィンドウをリサイズしても描画は保たれる」** — 白い地図もresize依存の描画変化も再現しなかった。
+
+**Decision**: 実ブラウザでの確認により再現しなかったため、本報告はツール由来(自動化ブラウザペインの`document.hidden`制約下での観察)と判断し、コード変更は行わない。D5とは対照的な結論になった点が重要: D5はユーザーの実ブラウザで再現し実バグと判明した例、今回は逆に実ブラウザで再現せずツール由来と判明した例。教訓は同じ — 「白い地図」系の報告は、フォアグラウンドの実ブラウザで確認するまでツール由来か実バグかを確定できない。自動化ブラウザツールに`document.hidden`制約がある限り、この種の報告は今後も起こり得る。
+
+**Consequences**: コード変更なし。`hfu/volca`側の掲載判断は、この結論(ツール由来、実ブラウザでは問題なし)をもって`staccato-ecosystem`経由で差し戻した。将来同種の「白い地図」報告があった場合、本エントリとD5の両方を参照し、最初のステップとして必ず実ブラウザ(フォアグラウンド)で確認することとする。
