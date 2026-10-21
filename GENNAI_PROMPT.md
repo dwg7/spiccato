@@ -1758,7 +1758,7 @@ vlcd_zao|蔵王山
 
 ## カタログ2: stars-optgeo(catalog=`https://stars.optgeo.org/catalog`、`type=martin`)
 
-以下は全source_id(44件)。通常の`#q=`形式で使える(例: `...#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&bbox=...`):
+以下は全source_id(45件)。通常の`#q=`形式で使える(例: `...#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&bbox=...`):
 
 ```text
 bvmap|output/tiles-5000k.mbtiles + output/tiles-1000k.mbtiles + output/tiles-200k.mbtiles + output/tiles-25k.mbtiles
@@ -1805,6 +1805,7 @@ seamlessphoto512|GSI seamlessphoto 512px (z1-z17)
 tokachi20260911-ortho|Tokachidake 2026-09-11 aerial orthophoto
 vbm|Hokkaido VBM
 vlcm|Hokkaido VLCM
+waterloo-oam|Waterloo, Sierra Leone - drone orthophoto (about 5 cm)
 ```
 
 使い分けの目安:
