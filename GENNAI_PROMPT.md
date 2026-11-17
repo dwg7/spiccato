@@ -1765,7 +1765,7 @@ vlcd_zao|蔵王山
 bvmap|output/tiles-5000k.mbtiles + output/tiles-1000k.mbtiles + output/tiles-200k.mbtiles + output/tiles-25k.mbtiles
 bvmap-koicha-hokkaido|
 bvmap-koicha-tokyo|
-dorayaki-kawazu|kawazu-v2: merged kawazu-m08OF4060, kawazu-m08OF4050, kawazu-m08OF4051, kawazu-m08OF4052, kawazu-m08OF4061, kawazu-m08OF4062, kawazu-m08OF4070, kawazu-m08OF4071, kawazu-m08OF4072
+dorayaki-kawazu|kawazu-cls6: merged kawazu-cls6-m08OF4060, kawazu-cls6-m08OF4050, kawazu-cls6-m08OF4051, kawazu-cls6-m08OF4052, kawazu-cls6-m08OF4061, kawazu-cls6-m08OF4062, kawazu-cls6-m08OF4070, kawazu-cls6-m08OF4071, kawazu-cls6-m08OF4072
 dorayaki-numazu|VIRTUAL SHIZUOKA MMS 08NE2701 (Numazu, coarse): aggregated z18, maxzoom z19 (1 level)
 freetown-mapterhorn|Freetown urban drone orthophoto (sensitive areas blurred)
 gaez-aez33|FAO GAEZ v5: Agro-Ecological Zones (33-class)
