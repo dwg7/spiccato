@@ -1765,7 +1765,7 @@ vlcd_zao|蔵王山
 bvmap|output/tiles-5000k.mbtiles + output/tiles-1000k.mbtiles + output/tiles-200k.mbtiles + output/tiles-25k.mbtiles
 bvmap-koicha-hokkaido|bvmap-koicha-hokkaido-roads-seams
 bvmap-koicha-tokyo|
-dorayaki-kawazu|kawazu-cls6: merged kawazu-cls6-m08OF4060, kawazu-cls6-m08OF4050, kawazu-cls6-m08OF4051, kawazu-cls6-m08OF4052, kawazu-cls6-m08OF4061, kawazu-cls6-m08OF4062, kawazu-cls6-m08OF4070, kawazu-cls6-m08OF4071, kawazu-cls6-m08OF4072
+dorayaki-kawazu|kawazu-tiled: tile-aligned build, aggregated z16,15, maxzoom z17
 dorayaki-numazu|VIRTUAL SHIZUOKA MMS 08NE2701 (Numazu, coarse): aggregated z18, maxzoom z19 (1 level)
 freetown-mapterhorn|Freetown urban drone orthophoto (sensitive areas blurred)
 gaez-aez33|FAO GAEZ v5: Agro-Ecological Zones (33-class)
@@ -1816,7 +1816,7 @@ waterloo-oam|Waterloo, Sierra Leone - drone orthophoto (about 5 cm)
 
 - **ラスタ背景地図で用が足りる場合**: spiccatoの既定背景(bvmapグレースケール + Mapterhorn)のままでよい。stars-optgeoを追加する必要は無い。
 - **全国空中写真が必要な場合**: `japan-seamless-aerial-z18`(z18のみ)または`seamlessphoto512`(z1-17)を通常のsource_idとして使う。
-- **利用者が「北海道の火山土地条件図/火山基本図を見たい」など、完成した主題図そのものを求めている場合**: 公開済みstyle_id `bvmap-koicha-starlight`・`bvmap-starlight`・`glup2030-zoning`・`std`・`vbm`・`vlcm` を`rstyle`/`ostyle`で参照する(道南〜道央限定)。GSI公式凡例に基づき色分け・記号化済みの完成品であり、通常はこちらを優先する:
+- **利用者が「北海道の火山土地条件図/火山基本図を見たい」など、完成した主題図そのものを求めている場合**: 公開済みstyle_id `bvmap-koicha-starlight`・`bvmap-nightsky`・`bvmap-starlight`・`glup2030-zoning`・`std`・`vbm`・`vlcm` を`rstyle`/`ostyle`で参照する(道南〜道央限定)。GSI公式凡例に基づき色分け・記号化済みの完成品であり、通常はこちらを優先する:
 
 ```
 https://dwg7.github.io/spiccato/#q=catalog=https://stars.optgeo.org/catalog&type=martin&rstyle=vlcm|火山土地条件図&ostyle=vbm|火山基本図&bbox=<west,south,east,north>&name=<地名>
