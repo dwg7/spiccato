@@ -1768,7 +1768,7 @@ bvmap-koicha-hokkaido|bvmap-koicha-hokkaido-roads-seams
 bvmap-koicha-tokyo|
 dorayaki-kawazu|kawazu-tiled: tile-aligned build, aggregated z16,15, maxzoom z17
 dorayaki-numazu|VIRTUAL SHIZUOKA MMS 08NE2701 (Numazu, coarse): aggregated z18, maxzoom z19 (1 level)
-dorayaki-sasebo|sasebo: tile-aligned build, aggregated z16,15, maxzoom z17
+dorayaki-sasebo|sasebo-32q: tile-aligned build, aggregated z16,15,14,13, maxzoom z17
 freetown-mapterhorn|Freetown urban drone orthophoto (sensitive areas blurred)
 gaez-aez33|FAO GAEZ v5: Agro-Ecological Zones (33-class)
 gaez-aez57|FAO GAEZ v5: Agro-Ecological Zones (57-class)
