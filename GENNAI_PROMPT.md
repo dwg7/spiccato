@@ -1759,15 +1759,16 @@ vlcd_zao|蔵王山
 
 ## カタログ2: stars-optgeo(catalog=`https://stars.optgeo.org/catalog`、`type=martin`)
 
-以下は全source_id(50件)。通常の`#q=`形式で使える(例: `...#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&bbox=...`):
+以下は全source_id(51件)。通常の`#q=`形式で使える(例: `...#q=catalog=https://stars.optgeo.org/catalog&type=martin&req=seamlessphoto512&bbox=...`):
 
 ```text
 ax-asahikawa|data/tiles/ax-asahikawa.pmtiles
 bvmap|output/tiles-5000k.mbtiles + output/tiles-1000k.mbtiles + output/tiles-200k.mbtiles + output/tiles-25k.mbtiles
+bvmap-koicha|
 bvmap-koicha-hokkaido|bvmap-koicha-hokkaido-roads-seams
 bvmap-koicha-tokyo|
 dorayaki-kawazu|kawazu-tiled: tile-aligned build, aggregated z16,15, maxzoom z17
-dorayaki-numazu|VIRTUAL SHIZUOKA MMS 08NE2701 (Numazu, coarse): aggregated z18, maxzoom z19 (1 level)
+dorayaki-numazu|VIRTUAL SHIZUOKA MMS 08NE2701 (Numazu, coarse): aggregated z18, maxzoom z19 (1 level) (Surfel Block v6)
 dorayaki-sasebo|sasebo-32q: tile-aligned build, aggregated z16,15,14,13, maxzoom z17
 freetown-mapterhorn|Freetown urban drone orthophoto (sensitive areas blurred)
 gaez-aez33|FAO GAEZ v5: Agro-Ecological Zones (33-class)
